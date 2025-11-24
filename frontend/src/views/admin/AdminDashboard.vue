@@ -84,8 +84,8 @@
         <div class="h-64 flex items-end justify-around gap-2">
           <div v-for="(value, index) in chartData" :key="index" class="flex-1 flex flex-col items-center">
             <div
-              class="w-full rounded-t-lg transition hover:opacity-80"
-              :style="{ height: (value / Math.max(...chartData)) * 100 + '%', backgroundColor: '#2563EB' }"
+              class="w-full rounded-t-lg transition hover:opacity-80 shadow-md"
+              :style="{ height: (value / Math.max(...chartData)) * 100 + '%', backgroundColor: '#3B82F6' }"
             ></div>
             <p class="text-xs text-gray-600 mt-2">{{ dayLabels[index] }}</p>
           </div>
@@ -96,7 +96,7 @@
       <div class="space-y-4">
         <div class="bg-white rounded-xl shadow-md p-6">
           <h3 class="text-lg font-bold text-gray-800 mb-4">Actions rapides</h3>
-          <button class="w-full py-3 text-white rounded-lg font-medium transition mb-3 flex items-center justify-center gap-2" style="background-color: #2563EB" @mouseenter="$event.target.style.backgroundColor='#1e40af'" @mouseleave="$event.target.style.backgroundColor='#2563EB'">
+          <button class="w-full py-3 text-white rounded-lg font-medium transition mb-3 flex items-center justify-center gap-2" style="background-color: #3B82F6" @mouseenter="$event.target.style.backgroundColor='#1D4ED8'" @mouseleave="$event.target.style.backgroundColor='#3B82F6'">
             <span>🔄</span>
             <span>Actualiser statistiques</span>
           </button>
