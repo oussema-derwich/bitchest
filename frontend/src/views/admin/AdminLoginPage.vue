@@ -88,6 +88,8 @@ const form = ref({
 })
 
 const login = async () => {
+  if (loading.value) return // Empêcher les clics multiples
+  
   loading.value = true
   error.value = ''
 
@@ -95,14 +97,14 @@ const login = async () => {
     const response = await axios.post('/api/auth/login', form.value)
     
     // Vérifier que l'utilisateur est admin
-    if (response.data.user.role !== 'admin') {
+    if (response.data.user.role !== 'admin' && response.data.user.role !== 'Administrator') {
       error.value = 'Accès refusé. Vous n\'êtes pas administrateur.'
       loading.value = false
       return
     }
 
     // Stocker le token
-    localStorage.setItem('token', response.data.token)
+    localStorage.setItem('token', response.data.token || response.data.access_token)
     localStorage.setItem('user', JSON.stringify(response.data.user))
 
     // Redirection vers dashboard admin
@@ -110,7 +112,6 @@ const login = async () => {
   } catch (e: any) {
     error.value = e.response?.data?.message || 'Identifiants invalides'
     console.error('Login error:', e)
-  } finally {
     loading.value = false
   }
 }

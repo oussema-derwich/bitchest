@@ -70,12 +70,14 @@ const loadChart = async () => {
         {
           label: 'Prix (USD)',
           data: prices,
-          borderColor: '#2563EB',
-          backgroundColor: 'rgba(37, 99, 235, 0.1)',
-          borderWidth: 2,
+          borderColor: '#3B82F6',
+          backgroundColor: 'rgba(59, 130, 246, 0.15)',
+          borderWidth: 3,
           fill: true,
-          tension: 0.3,
-          pointRadius: 0
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#3B82F6'
         }
       ]
     }

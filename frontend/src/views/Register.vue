@@ -25,7 +25,9 @@
           </div>
           <div v-if="error" class="text-red-600 mb-2">{{ error }}</div>
           <div v-if="success" class="text-green-600 mb-2">{{ success }}</div>
-          <button class="w-full btn-accent">Créer un compte</button>
+          <button :disabled="isLoading" :class="{ 'opacity-50 cursor-not-allowed': isLoading }" class="w-full btn-accent">
+            {{ isLoading ? 'Création en cours...' : 'Créer un compte' }}
+          </button>
         </form>
       </div>
     </div>
@@ -43,17 +45,21 @@ export default defineComponent({
     const email = ref('')
     const password = ref('')
     const password_confirmation = ref('')
-  const error = ref('')
+    const error = ref('')
     const success = ref('')
-  const errors = ref<Record<string, string[] | undefined> | null>(null)
+    const isLoading = ref(false)
+    const errors = ref<Record<string, string[] | undefined> | null>(null)
 
     const submit = async () => {
+      if (isLoading.value) return // Empêcher les clics multiples
+      
       error.value = ''
       success.value = ''
       if (password.value !== password_confirmation.value) {
         error.value = 'Les mots de passe ne correspondent pas.'
         return
       }
+      isLoading.value = true
       try {
         // reset previous errors
         errors.value = null
@@ -75,10 +81,11 @@ export default defineComponent({
           error.value = 'Erreur lors de la création du compte.'
         }
         console.error('Register error', e)
+        isLoading.value = false
       }
     }
 
-    return { name, email, password, password_confirmation, error, success, errors, submit }
+    return { name, email, password, password_confirmation, error, success, errors, isLoading, submit }
   }
 })
 </script>

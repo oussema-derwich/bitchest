@@ -42,17 +42,17 @@ export default defineComponent({
             {
               label: 'Prix',
               data: prices,
-              borderColor: '#2563EB',
-              backgroundColor: 'rgba(37, 99, 235, 0.1)',
+              borderColor: '#3B82F6',
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
               borderWidth: 2,
               fill: true,
               tension: 0.4,
               pointRadius: 4,
-              pointBackgroundColor: '#2563EB',
+              pointBackgroundColor: '#3B82F6',
               pointBorderColor: '#fff',
               pointBorderWidth: 2,
               pointHoverRadius: 6,
-              hoverBackgroundColor: '#2563EB'
+              hoverBackgroundColor: '#3B82F6'
             }
           ]
         },

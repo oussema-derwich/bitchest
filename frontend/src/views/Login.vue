@@ -13,7 +13,9 @@
           <input v-model="password" type="password" required class="w-full border px-3 py-2 rounded" />
         </div>
         <div v-if="error" class="text-red-600 mb-3">{{ error }}</div>
-        <button class="w-full btn-primary">Se connecter</button>
+        <button :disabled="isLoading" :class="{ 'opacity-50 cursor-not-allowed': isLoading }" class="w-full btn-primary">
+          {{ isLoading ? 'Connexion en cours...' : 'Se connecter' }}
+        </button>
       </form>
     </div>
   </div>
@@ -30,9 +32,13 @@ export default defineComponent({
     const email = ref('')
     const password = ref('')
     const error = ref('')
+    const isLoading = ref(false)
 
     const submit = async () => {
+      if (isLoading.value) return // Empêcher les clics multiples
+      
       error.value = ''
+      isLoading.value = true
       try {
         console.log('Tentative de connexion avec:', { email: email.value, password: password.value })
         const res = await api.post('/auth/login', { email: email.value, password: password.value })
@@ -57,10 +63,11 @@ export default defineComponent({
         console.error('Erreur lors de la connexion:', err)
         const serverMessage = err?.response?.data?.message || err?.response?.data || err?.message
         error.value = serverMessage || 'Email ou mot de passe incorrect'
+        isLoading.value = false
       }
     }
 
-    return { email, password, error, submit }
+    return { email, password, error, isLoading, submit }
   }
 })
 </script>

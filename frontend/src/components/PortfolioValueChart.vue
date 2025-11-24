@@ -34,8 +34,8 @@ export default defineComponent({
         datasets: [{
           label: 'Valeur du portefeuille',
           data: props.data.map(item => item.value),
-          borderColor: '#2563EB',
-          backgroundColor: 'rgba(37, 99, 235, 0.1)',
+          borderColor: '#3B82F6',
+          backgroundColor: 'rgba(59, 130, 246, 0.15)',
           fill: true,
           tension: 0.4,
           pointRadius: 4,
