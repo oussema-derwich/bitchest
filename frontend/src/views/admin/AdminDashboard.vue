@@ -81,12 +81,22 @@
             </button>
           </div>
         </div>
+
+        <!-- COURBE / BARRES EN BLEU -->
         <div class="h-64 flex items-end justify-around gap-2">
-          <div v-for="(value, index) in chartData" :key="index" class="flex-1 flex flex-col items-center">
+          <div
+            v-for="(value, index) in chartData"
+            :key="index"
+            class="flex-1 flex flex-col items-center"
+          >
             <div
               class="w-full rounded-t-lg transition hover:opacity-80 shadow-md"
-              :style="{ height: (value / Math.max(...chartData)) * 100 + '%', backgroundColor: '#3B82F6' }"
+              :style="{
+                height: (value / Math.max(...chartData)) * 100 + '%',
+                backgroundColor: '#3B82F6'
+              }"
             ></div>
+
             <p class="text-xs text-gray-600 mt-2">{{ dayLabels[index] }}</p>
           </div>
         </div>
@@ -96,16 +106,19 @@
       <div class="space-y-4">
         <div class="bg-white rounded-xl shadow-md p-6">
           <h3 class="text-lg font-bold text-gray-800 mb-4">Actions rapides</h3>
-          <button class="w-full py-3 text-white rounded-lg font-medium transition mb-3 flex items-center justify-center gap-2" style="background-color: #3B82F6" @mouseenter="$event.target.style.backgroundColor='#1D4ED8'" @mouseleave="$event.target.style.backgroundColor='#3B82F6'">
+          <button class="w-full py-3 text-white rounded-lg font-medium transition mb-3 flex items-center justify-center gap-2"
+            style="background-color: #3B82F6"
+            @mouseenter="($event.target as HTMLButtonElement).style.backgroundColor='#1D4ED8'"
+            @mouseleave="($event.target as HTMLButtonElement).style.backgroundColor='#3B82F6'">
             <span>🔄</span>
             <span>Actualiser statistiques</span>
           </button>
           <button class="w-full py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition mb-3 flex items-center justify-center gap-2">
-            <span>📄</span>
+            <span></span>
             <span>Exporter rapport</span>
           </button>
           <button class="w-full py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition flex items-center justify-center gap-2">
-            <span>⚙️</span>
+            <span></span>
             <span>Paramètres</span>
           </button>
         </div>
@@ -127,7 +140,11 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="activity in recentActivities" :key="activity.id" class="border-b border-gray-100 hover:bg-gray-50 transition">
+            <tr
+              v-for="activity in recentActivities"
+              :key="activity.id"
+              class="border-b border-gray-100 hover:bg-gray-50 transition"
+            >
               <td class="py-3 px-4 text-gray-600 text-sm">{{ activity.date }}</td>
               <td class="py-3 px-4">
                 <span class="font-medium text-gray-800">{{ activity.user }}</span>
@@ -163,7 +180,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
-import axios from 'axios'
 import api from '@/services/api'
 
 const chartPeriod = ref(7)
@@ -181,46 +197,11 @@ const stats = ref({
 })
 
 const recentActivities = ref([
-  {
-    id: 1,
-    date: '12/11/2025',
-    user: 'chedi01',
-    action: 'Achat',
-    detail: 'BTC - 0.002 à 88 000 DT',
-    status: 'Confirmé'
-  },
-  {
-    id: 2,
-    date: '12/11/2025',
-    user: 'Admin',
-    action: 'Ajout',
-    detail: 'Nouvelle crypto "ADA"',
-    status: 'Confirmé'
-  },
-  {
-    id: 3,
-    date: '11/11/2025',
-    user: 'mariem02',
-    action: 'Vente',
-    detail: 'ETH - 0.5 à 6 950 DT',
-    status: 'Confirmé'
-  },
-  {
-    id: 4,
-    date: '11/11/2025',
-    user: 'Admin',
-    action: 'Modification',
-    detail: 'Prix BTC ajusté à 88 000 DT',
-    status: 'Confirmé'
-  },
-  {
-    id: 5,
-    date: '10/11/2025',
-    user: 'system',
-    action: 'Alerte',
-    detail: 'Forte volatilité détectée',
-    status: 'En attente'
-  }
+  { id: 1, date: '12/11/2025', user: 'chedi01', action: 'Achat', detail: 'BTC - 0.002 à 88 000 DT', status: 'Confirmé' },
+  { id: 2, date: '12/11/2025', user: 'Admin', action: 'Ajout', detail: 'Nouvelle crypto "ADA"', status: 'Confirmé' },
+  { id: 3, date: '11/11/2025', user: 'mariem02', action: 'Vente', detail: 'ETH - 0.5 à 6 950 DT', status: 'Confirmé' },
+  { id: 4, date: '11/11/2025', user: 'Admin', action: 'Modification', detail: 'Prix BTC ajusté à 88 000 DT', status: 'Confirmé' },
+  { id: 5, date: '10/11/2025', user: 'system', action: 'Alerte', detail: 'Forte volatilité détectée', status: 'En attente' }
 ])
 
 const formatCurrency = (value: number): string => {
@@ -232,7 +213,6 @@ const formatCurrency = (value: number): string => {
 
 onMounted(async () => {
   try {
-    // Charger les statistiques du backend
     const response = await api.get('/admin/stats')
     stats.value = response.data
   } catch (e) {
