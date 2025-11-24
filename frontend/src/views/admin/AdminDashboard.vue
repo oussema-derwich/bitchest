@@ -96,7 +96,7 @@
       <div class="space-y-4">
         <div class="bg-white rounded-xl shadow-md p-6">
           <h3 class="text-lg font-bold text-gray-800 mb-4">Actions rapides</h3>
-          <button class="w-full py-3 text-white rounded-lg font-medium transition mb-3 flex items-center justify-center gap-2" style="background-color: #3B82F6" @mouseenter="($event.target as HTMLButtonElement).style.backgroundColor='#1D4ED8'" @mouseleave="($event.target as HTMLButtonElement).style.backgroundColor='#3B82F6'">
+          <button class="w-full py-3 text-white rounded-lg font-medium transition mb-3 flex items-center justify-center gap-2 hover:bg-blue-700" style="background-color: #3B82F6">
             <span>🔄</span>
             <span>Actualiser statistiques</span>
           </button>
