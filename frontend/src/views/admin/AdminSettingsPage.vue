@@ -190,7 +190,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
-import axios from 'axios'
+import api from '@/services/api'
 
 const settings = reactive({
   platformName: 'BitChest',
@@ -206,7 +206,7 @@ const settings = reactive({
 
 const savePlatformSettings = async () => {
   try {
-    await axios.post('/api/admin/settings/platform', {
+    await api.post('/admin/settings/platform', {
       platformName: settings.platformName,
       description: settings.description,
       supportEmail: settings.supportEmail
@@ -219,7 +219,7 @@ const savePlatformSettings = async () => {
 
 const saveSecuritySettings = async () => {
   try {
-    await axios.post('/api/admin/settings/security', {
+    await api.post('/admin/settings/security', {
       requireTwoFA: settings.requireTwoFA,
       sessionTimeout: settings.sessionTimeout,
       requireStrongPassword: settings.requireStrongPassword
@@ -232,7 +232,7 @@ const saveSecuritySettings = async () => {
 
 const saveNotificationSettings = async () => {
   try {
-    await axios.post('/api/admin/settings/notifications', {
+    await api.post('/admin/settings/notifications', {
       notifyNewUsers: settings.notifyNewUsers,
       notifyTransactions: settings.notifyTransactions,
       notifyAlerts: settings.notifyAlerts
@@ -245,7 +245,7 @@ const saveNotificationSettings = async () => {
 
 onMounted(async () => {
   try {
-    const response = await axios.get('/api/admin/settings')
+    const response = await api.get('/admin/settings')
     Object.assign(settings, response.data)
   } catch (e) {
     console.error('Error loading settings:', e)

@@ -176,6 +176,18 @@
                 <td class="px-6 py-4">{{ transaction.type === 'buy' ? 'Achat' : 'Vente' }}</td>
                 <td class="px-6 py-4">{{ transaction.quantity }}</td>
                 <td class="px-6 py-4">{{ formatPrice(transaction.amount) }}</td>
+                <td class="px-6 py-4 text-right">
+                  <div class="flex justify-end">
+                    <button
+                      v-if="transaction.status !== 'cancelled'"
+                      @click="cancelTransaction(transaction.id)"
+                      class="text-red-600 hover:text-red-800"
+                    >
+                      Annuler
+                    </button>
+                    <span v-else class="text-gray-500">Annulé</span>
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -305,6 +317,9 @@ export default defineComponent({
       'Montant'
     ]
 
+    // Add actions column for admin operations
+    transactionTableHeaders.push('Actions')
+
     const alertTableHeaders: string[] = [
       'Utilisateur',
       'Cryptomonnaie',
@@ -315,8 +330,24 @@ export default defineComponent({
     // Chargement des données
     const loadDashboard = async () => {
       try {
-        const response = await api.get('/admin/dashboard')
-        dashboardStats.value = response.data
+        // Backend exposes stats at /admin/stats (returns { status, data: { ... } })
+        const response = await api.get('/admin/stats')
+        const data = response.data && response.data.data ? response.data.data : {}
+
+        // Map keys to friendly labels
+        const labelMap: Record<string, string> = {
+          activeUsers: 'Utilisateurs actifs',
+          totalUsers: 'Total utilisateurs',
+          newUsersThisWeek: 'Nouveaux cette semaine',
+          totalTransactions: 'Transactions totales',
+          totalAlerts: 'Alertes totales',
+          totalCryptos: 'Cryptomonnaies'
+        }
+
+        dashboardStats.value = Object.entries(data).map(([key, value]) => ({
+          name: labelMap[key] || key,
+          value: value as string | number
+        }))
       } catch (error) {
         console.error('Erreur lors du chargement du tableau de bord:', error)
       }
@@ -343,10 +374,23 @@ export default defineComponent({
 
     const loadTransactions = async () => {
       try {
-        const response = await api.get('/admin/transactions')
+        // Request many items so admin can see all transactions (no pagination in the UI)
+        const response = await api.get('/admin/transactions', { params: { per_page: 10000 } })
         transactions.value = response.data.data || response.data || []
       } catch (error) {
         console.error('Erreur lors du chargement des transactions:', error)
+      }
+    }
+
+    // Cancel a transaction (admin action)
+    const cancelTransaction = async (transactionId: number) => {
+      if (!confirm('Annuler cette transaction ?')) return
+      try {
+        await api.post(`/admin/transactions/${transactionId}/cancel`)
+        await loadTransactions()
+      } catch (error) {
+        console.error('Erreur lors de l\'annulation de la transaction:', error)
+        alert('Impossible d\'annuler la transaction')
       }
     }
 
@@ -499,6 +543,7 @@ export default defineComponent({
       toggleAlert,
       formatPrice,
       formatDate
+      ,cancelTransaction
     }
   }
 })

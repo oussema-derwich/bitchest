@@ -23,46 +23,50 @@
 
 <script lang="ts">
 import { defineComponent, ref } from 'vue'
-import api from '../services/api'
-import router from '../router'
-import { setUser } from '../services/auth'
+import { useRouter } from 'vue-router'
+import { login } from '../services/auth'
+import { formatApiError, isValidationError } from '../services/errorHandler'
 
 export default defineComponent({
   setup() {
+    const router = useRouter()
     const email = ref('')
     const password = ref('')
     const error = ref('')
     const isLoading = ref(false)
 
     const submit = async () => {
-      if (isLoading.value) return // Empêcher les clics multiples
-      
+      if (isLoading.value) return
+
       error.value = ''
       isLoading.value = true
-      try {
-        console.log('Tentative de connexion avec:', { email: email.value, password: password.value })
-        const res = await api.post('/auth/login', { email: email.value, password: password.value })
-        console.log('Réponse du serveur:', res.data)
-        const token = res.data.access_token || res.data.token
-        const user = res.data.user
 
-        if (!token || !user) {
-          throw new Error('Informations de connexion invalides')
+      try {
+        // Use new auth service
+        const response = await login(email.value, password.value)
+
+        // Ensure we have a valid user object
+        if (!response.user) {
+          throw new Error('Données utilisateur invalides')
         }
 
-        setUser(user, token)
-
-        // Redirection selon le rôle
-        if (user.role === 'admin' || user.role === 'Administrator' || user.isAdmin) {
+        // Redirect based on role
+        const userRole = response.user.role || 'user'
+        if (userRole === 'admin') {
           router.push({ name: 'AdminDashboard' })
         } else {
           router.push({ name: 'Dashboard' })
         }
       } catch (err: any) {
-        // Show server-provided message when available to help debug (404, validation, etc.)
-        console.error('Erreur lors de la connexion:', err)
-        const serverMessage = err?.response?.data?.message || err?.response?.data || err?.message
-        error.value = serverMessage || 'Email ou mot de passe incorrect'
+        // Format and display error
+        const apiError = formatApiError(err)
+        error.value = apiError.message || 'Erreur lors de la connexion'
+
+        // Log validation errors if present
+        if (isValidationError(err)) {
+          console.log('Validation errors:', apiError.errors)
+        }
+      } finally {
         isLoading.value = false
       }
     }

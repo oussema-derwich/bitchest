@@ -7,6 +7,7 @@
           <label class="block text-sm font-medium text-gray-700 mb-2">Rechercher</label>
           <input
             v-model="searchQuery"
+            @input="handleSearch"
             type="text"
             placeholder="Nom, email ou rôle..."
             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -16,26 +17,37 @@
           <label class="block text-sm font-medium text-gray-700 mb-2">Statut</label>
           <select
             v-model="selectedStatus"
+            @change="handleFilter"
             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Tous les statuts</option>
-            <option value="Actif">Actif</option>
-            <option value="Suspendu">Suspendu</option>
-            <option value="En attente">En attente</option>
+            <option value="active">Actif</option>
+            <option value="inactive">Inactif</option>
           </select>
         </div>
         <div class="flex items-end">
-          <button class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition flex items-center justify-center gap-2">
-            <span>🔍</span>
-            <span>Filtrer</span>
+          <button 
+            @click="handleFilter"
+            class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition flex items-center justify-center gap-2"
+            :disabled="isLoading"
+          >
+            <span v-if="!isLoading">🔍</span>
+            <span v-else class="animate-spin">⏳</span>
+            <span>{{ isLoading ? 'Chargement...' : 'Filtrer' }}</span>
           </button>
         </div>
       </div>
     </div>
 
     <!-- Users Table -->
-    <div class="bg-white rounded-xl shadow-md overflow-hidden">
-      <div class="overflow-x-auto">
+    <div class="bg-white rounded-xl shadow-md overflow-hidden mb-6">
+      <div v-if="isLoading" class="p-6 text-center text-gray-500">
+        ⏳ Chargement des utilisateurs...
+      </div>
+      <div v-else-if="users.length === 0" class="p-6 text-center text-gray-500">
+        Aucun utilisateur trouvé
+      </div>
+      <div v-else class="overflow-x-auto">
         <table class="w-full">
           <thead>
             <tr class="bg-gray-50 border-b-2 border-gray-200">
@@ -48,7 +60,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="user in filteredUsers" :key="user.id" class="border-b border-gray-100 hover:bg-gray-50 transition">
+            <tr v-for="user in users" :key="user.id" class="border-b border-gray-100 hover:bg-gray-50 transition">
               <td class="py-4 px-6">
                 <div class="flex items-center gap-3">
                   <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold">
@@ -77,7 +89,7 @@
                 </span>
               </td>
               <td class="py-4 px-6">
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-wrap">
                   <button
                     @click="selectUser(user); showDetailsPanel = true"
                     class="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-200 transition"
@@ -91,20 +103,6 @@
                     ✏️ Modifier
                   </button>
                   <button
-                    v-if="user.is_active"
-                    @click="suspendUser(user.id)"
-                    class="px-3 py-1 bg-orange-100 text-orange-600 rounded-lg text-xs font-medium hover:bg-orange-200 transition"
-                  >
-                    ⛔ Suspendre
-                  </button>
-                  <button
-                    v-else
-                    @click="activateUser(user.id)"
-                    class="px-3 py-1 bg-green-100 text-green-600 rounded-lg text-xs font-medium hover:bg-green-200 transition"
-                  >
-                    ✅ Réactiver
-                  </button>
-                  <button
                     @click="deleteUser(user.id)"
                     class="px-3 py-1 bg-red-100 text-red-600 rounded-lg text-xs font-medium hover:bg-red-200 transition"
                   >
@@ -115,6 +113,42 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div v-if="pagination && pagination.last_page > 1" class="flex items-center justify-between bg-white rounded-xl shadow-md p-4 mb-6">
+      <div class="text-sm text-gray-600">
+        Affichage {{ pagination.from }} à {{ pagination.to }} sur {{ pagination.total }} utilisateurs
+      </div>
+      <div class="flex gap-2">
+        <button
+          @click="goToPage(currentPage - 1)"
+          :disabled="currentPage <= 1"
+          class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          ← Précédent
+        </button>
+        <button
+          v-for="page in pageNumbers"
+          :key="page"
+          @click="goToPage(page)"
+          :class="[
+            'px-3 py-2 rounded-lg border',
+            currentPage === page
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'border-gray-300 hover:bg-gray-50'
+          ]"
+        >
+          {{ page }}
+        </button>
+        <button
+          @click="goToPage(currentPage + 1)"
+          :disabled="currentPage >= pagination.last_page"
+          class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Suivant →
+        </button>
       </div>
     </div>
 
@@ -149,7 +183,7 @@
         <div class="space-y-4">
           <div class="bg-gray-50 p-4 rounded-lg">
             <p class="text-xs text-gray-500 mb-1">Date d'inscription</p>
-            <p class="font-medium text-gray-800">{{ selectedUser.createdAt }}</p>
+            <p class="font-medium text-gray-800">{{ formatDate(selectedUser.created_at) }}</p>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
@@ -158,8 +192,8 @@
               <p class="font-bold text-lg text-blue-600">{{ formatCurrency(selectedUser.balance) }}</p>
             </div>
             <div class="bg-gray-50 p-4 rounded-lg">
-              <p class="text-xs text-gray-500 mb-1">Transactions</p>
-              <p class="font-bold text-lg text-emerald-600">{{ selectedUser.transactions }}</p>
+              <p class="text-xs text-gray-500 mb-1">Rôle</p>
+              <p class="font-bold text-lg text-emerald-600">{{ selectedUser.role === 'admin' ? 'Admin' : 'Client' }}</p>
             </div>
           </div>
 
@@ -201,77 +235,51 @@
 import { ref, computed, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
 import { useRouter } from 'vue-router'
-import api from '../../services/api'
-
-interface User {
-  id: number
-  name: string
-  email: string
-  created_at: string
-  role: string
-  is_active: boolean
-  balance_eur: number
-}
+import { getAdminUsers, deleteAdminUser, type AdminUser, type PaginatedResponse } from '@/services/adminApi'
 
 const router = useRouter()
 const searchQuery = ref('')
 const selectedStatus = ref('')
 const showDetailsPanel = ref(false)
-const selectedUser = ref<User | null>(null)
+const selectedUser = ref<AdminUser | null>(null)
 const isLoading = ref(false)
+const currentPage = ref(1)
 
-const users = ref<User[]>([])
+const users = ref<AdminUser[]>([])
+const pagination = ref<PaginatedResponse<AdminUser>['pagination'] | null>(null)
 
-const filteredUsers = computed(() => {
-  return users.value.filter(user => {
-    const matchesSearch = 
-      user.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchQuery.value.toLowerCase())
-    
-    const matchesStatus = !selectedStatus.value || 
-      (selectedStatus.value === 'Actif' && user.is_active) ||
-      (selectedStatus.value === 'Inactif' && !user.is_active)
-    
-    return matchesSearch && matchesStatus
-  })
+const pageNumbers = computed(() => {
+  if (!pagination.value) return []
+  const pages = []
+  const maxPages = Math.min(5, pagination.value.last_page)
+  let start = Math.max(1, currentPage.value - Math.floor(maxPages / 2))
+  let end = Math.min(pagination.value.last_page, start + maxPages - 1)
+  if (end - start + 1 < maxPages) {
+    start = Math.max(1, end - maxPages + 1)
+  }
+  for (let i = start; i <= end; i++) {
+    pages.push(i)
+  }
+  return pages
 })
 
-const selectUser = (user: User) => {
+const selectUser = (user: AdminUser) => {
   selectedUser.value = user
 }
 
-const editUser = (user: User) => {
+const editUser = (user: AdminUser) => {
   console.log('Edit user:', user)
   // Open edit modal here
 }
 
-const suspendUser = async (userId: number) => {
-  try {
-    await api.put(`/admin/users/${userId}`, { is_active: false })
-    const user = users.value.find(u => u.id === userId)
-    if (user) user.is_active = false
-  } catch (e) {
-    console.error('Error suspending user:', e)
-  }
-}
-
-const activateUser = async (userId: number) => {
-  try {
-    await api.put(`/admin/users/${userId}`, { is_active: true })
-    const user = users.value.find(u => u.id === userId)
-    if (user) user.is_active = true
-  } catch (e) {
-    console.error('Error activating user:', e)
-  }
-}
-
-const deleteUser = async (userId: number) => {
-  if (confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) {
+const deleteUserAction = async (userId: number) => {
+  if (confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.')) {
     try {
-      await api.delete(`/admin/users/${userId}`)
-      users.value = users.value.filter(u => u.id !== userId)
+      await deleteAdminUser(userId)
+      await loadUsers()
+      alert('Utilisateur supprimé avec succès')
     } catch (e) {
+      alert('Erreur lors de la suppression')
       console.error('Error deleting user:', e)
     }
   }
@@ -291,24 +299,45 @@ const formatDate = (dateString: string): string => {
   }
 }
 
-const formatCurrency = (value: number): string => {
+const formatCurrency = (value: number | undefined): string => {
+  if (value === undefined) return '0,00 TND'
   return new Intl.NumberFormat('fr-TN', {
     style: 'currency',
     currency: 'TND'
   }).format(value)
 }
 
+const handleSearch = () => {
+  currentPage.value = 1
+  loadUsers()
+}
+
+const handleFilter = () => {
+  currentPage.value = 1
+  loadUsers()
+}
+
+const goToPage = (page: number) => {
+  if (page >= 1 && pagination.value && page <= pagination.value.last_page) {
+    currentPage.value = page
+    loadUsers()
+  }
+}
+
 const loadUsers = async () => {
   isLoading.value = true
   try {
-    const response = await api.get('/admin/users')
-    if (response.data?.data) {
-      users.value = response.data.data
-    } else if (Array.isArray(response.data)) {
-      users.value = response.data
-    }
+    const response = await getAdminUsers(
+      currentPage.value,
+      10,
+      searchQuery.value || undefined,
+      selectedStatus.value === 'active' ? 'active' : selectedStatus.value === 'inactive' ? 'inactive' : undefined
+    )
+    users.value = response.data
+    pagination.value = response.pagination
   } catch (e) {
     console.error('Error loading users:', e)
+    alert('Erreur lors du chargement des utilisateurs')
   } finally {
     isLoading.value = false
   }
@@ -317,7 +346,19 @@ const loadUsers = async () => {
 onMounted(() => {
   loadUsers()
 })
+
+// Alias for backward compatibility
+const deleteUser = deleteUserAction
 </script>
 
 <style scoped>
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
 </style>

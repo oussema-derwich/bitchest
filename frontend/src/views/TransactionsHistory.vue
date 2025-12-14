@@ -35,8 +35,7 @@
               class="px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium focus:border-primary focus:outline-none transition"
             >
               <option value="">Toutes les cryptos</option>
-              <option value="Bitcoin">Bitcoin</option>
-              <option value="Ethereum">Ethereum</option>
+              <option v-for="crypto in availableCryptos" :key="crypto" :value="crypto">{{ crypto }}</option>
             </select>
 
             <select
@@ -153,63 +152,50 @@ export default defineComponent({
     const filterCrypto = ref('')
     const filterType = ref('')
     const filterDate = ref('')
+    const availableCryptos = ref<string[]>([])
 
-    const transactions = ref<Transaction[]>([
-      {
-        id: 1,
-        date: '05/11/2025',
-        type: 'Achat',
-        crypto: 'Bitcoin',
-        quantity: '0.002',
-        amount: '176,45',
-        status: 'Confirmé'
-      },
-      {
-        id: 2,
-        date: '06/11/2025',
-        type: 'Vente',
-        crypto: 'Ethereum',
-        quantity: '0.1',
-        amount: '690',
-        status: 'Annulé'
-      },
-      {
-        id: 3,
-        date: '07/11/2025',
-        type: 'Achat',
-        crypto: 'Bitcoin',
-        quantity: '0.001',
-        amount: '88,23',
-        status: 'Confirmé'
-      },
-      {
-        id: 4,
-        date: '08/11/2025',
-        type: 'Achat',
-        crypto: 'Ethereum',
-        quantity: '0.5',
-        amount: '3 400',
-        status: 'Confirmé'
-      }
-    ])
+    const transactions = ref<Transaction[]>([])
 
     const filteredTransactions = computed(() => {
       return transactions.value.filter((tx) => {
         if (filterCrypto.value && tx.crypto !== filterCrypto.value) return false
         if (filterType.value && tx.type !== filterType.value) return false
-        if (filterDate.value && tx.date !== filterDate.value) return false
+        if (filterDate.value) {
+          // Format date for comparison
+          const txDate = new Date(tx.date).toISOString().split('T')[0]
+          if (txDate !== filterDate.value) return false
+        }
         return true
       })
     })
 
     const loadData = async () => {
       try {
+        // Load profile
         const profileRes = await api.get('/auth/profile')
         if (profileRes.data) {
           userName.value = profileRes.data.name || 'Utilisateur'
         }
+
+        // Load transactions
+        const transRes = await api.get('/transactions')
+        if (transRes.data && transRes.data.data) {
+          const apiTransactions = transRes.data.data
+          transactions.value = apiTransactions.map((tx: any) => ({
+            id: tx.id,
+            date: tx.date,
+            type: tx.transaction.type,
+            crypto: tx.crypto.symbol,
+            quantity: tx.transaction.quantite.toString(),
+            amount: tx.transaction.montant_eur.toFixed(2).replace('.', ','),
+            status: 'Confirmé'
+          }))
+          
+          // Extract unique cryptos for filter
+          availableCryptos.value = [...new Set(transactions.value.map(t => t.crypto))]
+        }
       } catch (e) {
-        console.error('Error loading profile:', e)
+        console.error('Error loading data:', e)
       }
     }
 
@@ -284,6 +270,7 @@ export default defineComponent({
       filterCrypto,
       filterType,
       filterDate,
+      availableCryptos,
       transactions,
       filteredTransactions,
       logout,

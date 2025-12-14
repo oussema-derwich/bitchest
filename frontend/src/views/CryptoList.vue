@@ -146,8 +146,8 @@ export default defineComponent({
 
     const loadCryptos = async () => {
       try {
-        const response = await api.get('/cryptos')
-        cryptos.value = response.data
+        const response = await api.get('/cryptocurrencies')
+        cryptos.value = response.data.data || response.data
       } catch (error) {
         console.error('Erreur lors du chargement des cryptos:', error)
       }

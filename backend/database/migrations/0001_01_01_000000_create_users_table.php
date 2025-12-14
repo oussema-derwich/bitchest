@@ -19,8 +19,9 @@ return new class extends Migration
             $table->string('password');
             $table->string('temp_password')->nullable();
             $table->enum('role', ['client', 'admin'])->default('client');
-            $table->decimal('balance_eur', 15, 2)->default(0);
-            $table->boolean('is_active')->default(true);
+            $table->string('photo')->nullable();
+            $table->boolean('is_active')->default(false);
+            $table->text('avatar')->nullable();
             $table->integer('login_attempts')->default(0);
             $table->timestamp('last_login_attempt')->nullable();
             $table->rememberToken();

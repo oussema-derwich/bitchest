@@ -76,7 +76,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import api from '@/services/api'
 
 const router = useRouter()
 const loading = ref(false)
@@ -94,7 +94,7 @@ const login = async () => {
   error.value = ''
 
   try {
-    const response = await axios.post('/api/auth/login', form.value)
+    const response = await api.post('/auth/login', form.value)
     
     // Vérifier que l'utilisateur est admin
     if (response.data.user.role !== 'admin' && response.data.user.role !== 'Administrator') {

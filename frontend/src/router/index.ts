@@ -29,6 +29,10 @@ import AdminCryptosPage from '../views/admin/AdminCryptosPage.vue'
 import AdminTransactionsPage from '../views/admin/AdminTransactionsPage.vue'
 import AdminAlertsPage from '../views/admin/AdminAlertsPage.vue'
 import AdminSettingsPage from '../views/admin/AdminSettingsPage.vue'
+import AdminRegistrationRequestsPage from '../views/admin/AdminRegistrationRequestsPage.vue'
+
+// Auth utilities
+import { isAuthenticated, currentUser, loadUserFromStorage } from '../services/auth'
 const routes = [
   { path: '/', name: 'Home', component: Home },
   { path: '/market', name: 'Market', component: Market },
@@ -63,10 +67,28 @@ const routes = [
     meta: { requiresAuth: true, requiresAdmin: true } 
   },
   { 
+    path: '/admin/profile', 
+    name: 'AdminProfile', 
+    component: ProfilePage, 
+    meta: { requiresAuth: true, requiresAdmin: true } 
+  },
+  { 
+    path: '/admin/audit', 
+    name: 'AdminAudit', 
+    component: AdminDashboard, 
+    meta: { requiresAuth: true, requiresAdmin: true } 
+  },
+  { 
     path: '/admin/users', 
     name: 'AdminUsers', 
     component: AdminUsersPage, 
     meta: { requiresAuth: true, requiresAdmin: true } 
+  },
+  {
+    path: '/admin/registration-requests',
+    name: 'AdminRegistrationRequests',
+    component: AdminRegistrationRequestsPage,
+    meta: { requiresAuth: true, requiresAdmin: true }
   },
   { 
     path: '/admin/cryptos', 
@@ -99,23 +121,43 @@ const router = createRouter({
   routes
 })
 
+// Setup authentication guard
 router.beforeEach((to: any, from: any, next: any) => {
-  const token = localStorage.getItem('token')
-  const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null
-
-  if (to.meta.requiresAuth && !token) {
-    next({ name: 'Login' })
-    return
+  // Load user from storage on first check
+  if (!isAuthenticated.value && localStorage.getItem('token')) {
+    loadUserFromStorage()
   }
 
-  if (to.meta.requiresAdmin) {
-    const isAdmin = user && (user.isAdmin || user.role === 'admin' || user.role === 'Administrator' || user.role === 'ADMIN')
-    if (!isAdmin) {
+  const requiresAuth = to.meta.requiresAuth
+  const requiresAdmin = to.meta.requiresAdmin
+
+  // If route requires authentication
+  if (requiresAuth) {
+    if (!isAuthenticated.value) {
+      // Not authenticated, redirect to login
+      next({
+        name: 'Login',
+        query: { redirect: to.fullPath }
+      })
+      return
+    }
+
+    // If route requires admin role
+    if (requiresAdmin && currentUser.value?.role !== 'admin') {
+      // Not admin, redirect to dashboard
       next({ name: 'Dashboard' })
       return
     }
   }
 
+  // If already authenticated and trying to access login/register
+  if (isAuthenticated.value && (to.name === 'Login' || to.name === 'Register')) {
+    // Redirect to dashboard if already logged in
+    next({ name: 'Dashboard' })
+    return
+  }
+
+  // Allow navigation
   next()
 })
 

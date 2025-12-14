@@ -14,7 +14,7 @@ import Chart from 'chart.js/auto'
 import type { ChartData } from 'chart.js'
 import api from '@/services/api'
 
-defineProps<{ period: string }>()
+defineProps<{ period: string | number }>()
 
 const chartRef = ref<HTMLCanvasElement | null>(null)
 const chartLoaded = ref(false)

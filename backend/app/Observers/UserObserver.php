@@ -12,15 +12,8 @@ class UserObserver
      */
     public function created(User $user): void
     {
-        // Create wallet for new user
-        Wallet::create([
-            'user_id' => $user->id,
-        ]);
-
-        // Set balance to 500 EUR for new clients
-        if ($user->role === 'client') {
-            $user->update(['balance_eur' => 500]);
-        }
+        // Wallet is created by RegistrationRequestController upon admin approval
+        // Balance is stored in wallet.balance, not user.balance_eur
     }
 
     /**

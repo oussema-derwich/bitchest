@@ -31,6 +31,15 @@ class AdminController extends Controller
         // recent transactions (limit 10)
         $recentTransactions = Transaction::with(['user', 'crypto'])->orderBy('created_at', 'desc')->limit(10)->get();
 
+        // Convert avatar paths to full URLs
+        $recentTransactions->each(function($transaction) {
+            if ($transaction->user && $transaction->user->avatar) {
+                $transaction->user->avatar = str_starts_with($transaction->user->avatar, 'http') 
+                    ? $transaction->user->avatar 
+                    : asset('storage/' . $transaction->user->avatar);
+            }
+        });
+
         $stats = [
             'activeUsers' => $activeUsers,
             'userGrowth' => $newUsers,
@@ -129,6 +138,16 @@ class AdminController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate(10);
 
+        // Convert avatar paths to full URLs
+        $users->getCollection()->transform(function($user) {
+            if ($user->avatar) {
+                $user->avatar = str_starts_with($user->avatar, 'http') 
+                    ? $user->avatar 
+                    : asset('storage/' . $user->avatar);
+            }
+            return $user;
+        });
+
         return response()->json($users);
     }
 
@@ -206,6 +225,16 @@ class AdminController extends Controller
         $transactions = Transaction::with(['user', 'crypto'])
             ->orderBy('created_at', 'desc')
             ->paginate(15);
+
+        // Convert avatar paths to full URLs
+        $transactions->getCollection()->transform(function($transaction) {
+            if ($transaction->user && $transaction->user->avatar) {
+                $transaction->user->avatar = str_starts_with($transaction->user->avatar, 'http') 
+                    ? $transaction->user->avatar 
+                    : asset('storage/' . $transaction->user->avatar);
+            }
+            return $transaction;
+        });
 
         return response()->json($transactions);
     }

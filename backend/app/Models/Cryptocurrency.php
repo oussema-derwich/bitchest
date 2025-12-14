@@ -10,55 +10,75 @@ class Cryptocurrency extends Model
 {
     use HasFactory;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<string>
-     */
     protected $fillable = [
         'name',
         'symbol',
         'current_price',
-        'logo_path'
+        'image',
+        'logo_url',
+        'description',
+        'in_stock'
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
-        'current_price' => 'decimal:2'
+        'current_price' => 'decimal:8',
+        'in_stock' => 'boolean'
     ];
 
     /**
-     * The table associated with the model.
-     *
-     * @var string
+     * Table name
      */
-    protected $table = 'cryptos';
+    protected $table = 'cryptocurrencies';
 
     /**
-     * Get the wallet cryptos for the cryptocurrency.
+     * Relation: Cryptocurrency a plusieurs WalletCrypto
      */
     public function walletCryptos(): HasMany
     {
-        return $this->hasMany(WalletCrypto::class);
+        return $this->hasMany(WalletCrypto::class, 'cryptocurrency_id');
     }
 
     /**
-     * Get the transactions for the cryptocurrency.
-     */
-    public function transactions(): HasMany
-    {
-        return $this->hasMany(Transaction::class);
-    }
-
-    /**
-     * Get the price histories for the cryptocurrency.
+     * Relation: Cryptocurrency a plusieurs PriceHistory
      */
     public function priceHistories(): HasMany
     {
-        return $this->hasMany(PriceHistory::class);
+        return $this->hasMany(PriceHistory::class, 'cryptocurrency_id');
+    }
+
+    /**
+     * Relation: Cryptocurrency a plusieurs Transactions
+     */
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class, 'cryptocurrency_id');
+    }
+
+    /**
+     * Relation: Cryptocurrency a plusieurs Favorites
+     */
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(Favorite::class, 'cryptocurrency_id');
+    }
+
+    /**
+     * Get the latest price history
+     */
+    public function getLatestPrice()
+    {
+        return $this->priceHistories()->latest('created_at')->first();
+    }
+
+    /**
+     * Get price history for the last N days
+     */
+    public function getPriceHistory($days = 30)
+    {
+        return $this->priceHistories()
+            ->where('created_at', '>=', now()->subDays($days))
+            ->orderBy('created_at', 'asc')
+            ->get();
     }
 }
+

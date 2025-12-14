@@ -85,7 +85,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import api from '../services/api'
+import { logout } from '../services/auth'
 
 export default defineComponent({
   setup() {
@@ -96,21 +96,20 @@ export default defineComponent({
       return route.path === path
     }
 
-    const logout = async () => {
+    const handleLogout = async () => {
       try {
-        await api.post('/auth/logout')
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
+        await logout()
         router.push('/login')
       } catch (e) {
         console.error('Logout error:', e)
+        // Still redirect even if logout fails
         router.push('/login')
       }
     }
 
     return {
       isActive,
-      logout
+      logout: handleLogout
     }
   }
 })

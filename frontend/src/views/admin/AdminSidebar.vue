@@ -53,6 +53,19 @@
       </RouterLink>
 
       <RouterLink
+        to="/admin/registration-requests"
+        :class="[
+          'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200',
+          route.path === '/admin/registration-requests'
+            ? 'bg-blue-600 text-white font-semibold shadow-lg'
+            : 'text-blue-100 hover:bg-blue-700'
+        ]"
+      >
+        <span class="text-lg">📝</span>
+        <span>Demandes d'inscription</span>
+      </RouterLink>
+
+      <RouterLink
         to="/admin/transactions"
         :class="[
           'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200',
@@ -106,14 +119,14 @@
 
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router'
-import axios from 'axios'
+import api from '@/services/api'
 
 const router = useRouter()
 const route = useRoute()
 
 const logout = async () => {
   try {
-    await axios.post('/api/auth/logout')
+    await api.post('/auth/logout')
     router.push('/')
   } catch (e) {
     console.error('Logout error:', e)

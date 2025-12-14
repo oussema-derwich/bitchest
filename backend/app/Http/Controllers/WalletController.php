@@ -43,7 +43,7 @@ class WalletController extends Controller
                 'symbol' => $holding->cryptocurrency->symbol,
                 'name' => $holding->cryptocurrency->name,
                 'quantity' => $holding->quantity,
-                'avg_buy_price' => $holding->avg_buy_price,
+                'avg_buy_price' => $holding->average_buy_price,
                 'current_price' => $holding->cryptocurrency->current_price,
                 'current_value' => $holding->getCurrentValue(),
                 'profit_loss' => $holding->getProfitLoss(),
@@ -56,9 +56,9 @@ class WalletController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => [
-                'balance_eur' => (float)$user->balance_eur,
+                'balance_eur' => (float)$wallet->balance,
                 'total_crypto_value' => (float)$total_crypto_value,
-                'total_portfolio_value' => (float)$user->balance_eur + $total_crypto_value,
+                'total_portfolio_value' => (float)$wallet->balance + $total_crypto_value,
                 'holdings' => $holdings
             ]
         ]);
@@ -70,9 +70,8 @@ class WalletController extends Controller
     public function buy(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'cryptocurrency_id' => 'required|integer|exists:cryptos,id',
-            'quantity' => 'required|numeric|min:0.00000001',
-            'price' => 'required|numeric|min:0.01'
+            'cryptocurrency_id' => 'required|integer|exists:cryptocurrencies,id',
+            'quantity' => 'required|numeric|min:0.00000001'
         ]);
 
         if ($validator->fails()) {
@@ -86,72 +85,101 @@ class WalletController extends Controller
         $user = Auth::user();
         $wallet = $user->wallet;
         $quantity = (float)$request->quantity;
-        $price = (float)$request->price;
-        $total_cost = $quantity * $price;
-
-        // Vérifier le solde
-        if ($user->balance_eur < $total_cost) {
+        
+        // Récupérer le prix courant de la crypto
+        $crypto = Cryptocurrency::find($request->cryptocurrency_id);
+        if (!$crypto) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Solde insuffisant pour cet achat'
+                'message' => 'Crypto-monnaie non trouvée'
+            ], 404);
+        }
+        
+        $price = (float)$crypto->current_price;
+        $total_cost = $quantity * $price;
+        $wallet_balance = (float)$wallet->balance;
+
+        // Vérifier le solde
+        if ($wallet_balance < $total_cost) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Solde insuffisant pour cet achat",
+                'data' => [
+                    'solde_disponible' => $wallet_balance,
+                    'cout_total' => $total_cost,
+                    'manque' => $total_cost - $wallet_balance
+                ]
             ], 400);
         }
 
         try {
-            // Débiter le compte
-            $user->balance_eur -= $total_cost;
-            $user->save();
+            // Débiter le portefeuille
+            $wallet->balance -= $total_cost;
+            $wallet->save();
 
             // Trouver ou créer le holding
             $holding = WalletCrypto::firstOrCreate(
                 ['wallet_id' => $wallet->id, 'cryptocurrency_id' => $request->cryptocurrency_id],
-                ['quantity' => 0, 'avg_buy_price' => 0]
+                ['quantity' => 0, 'average_buy_price' => 0]
             );
 
             // Calculer le nouveau prix moyen
             $old_quantity = (float)$holding->quantity;
-            $old_total_cost = $old_quantity * (float)$holding->avg_buy_price;
+            $old_total_cost = $old_quantity * (float)$holding->average_buy_price;
             $new_quantity = $old_quantity + $quantity;
             $new_avg_price = $new_quantity > 0 ? ($old_total_cost + $total_cost) / $new_quantity : $price;
 
             $holding->update([
                 'quantity' => $new_quantity,
-                'avg_buy_price' => $new_avg_price
+                'average_buy_price' => $new_avg_price
             ]);
 
             // Créer la transaction
-            Transaction::create([
-                'user_id' => $user->id,
-                'cryptocurrency_id' => $request->cryptocurrency_id,
+            $transaction = Transaction::create([
+                'wallet_crypto_id' => $holding->id,
                 'type' => 'buy',
                 'quantity' => $quantity,
-                'price_at_transaction' => $price,
-                'eur_amount' => $total_cost
+                'unit_price' => $price,
+                'total_price' => $total_cost,
+                'status' => 'completed'
             ]);
 
             // Créer notification d'achat
-            $crypto = \App\Models\Cryptocurrency::find($request->cryptocurrency_id);
-            \App\Models\Notification::create([
-                'user_id' => $user->id,
-                'type' => 'buy',
-                'title' => "Achat réussi - {$crypto->symbol}",
-                'message' => "Vous avez acheté {$quantity} {$crypto->symbol} à {$price}€ chacun (Total: {$total_cost}€)"
-            ]);
+            if ($crypto) {
+                \App\Models\Notification::create([
+                    'user_id' => $user->id,
+                    'message' => "Achat réussi - {$crypto->symbol}: {$quantity} unités à {$price}€ (Total: {$total_cost}€)"
+                ]);
+            }
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'Achat réussi',
                 'data' => [
-                    'transaction' => [
-                        'type' => 'buy',
-                        'quantity' => $quantity,
-                        'price' => $price,
-                        'total' => $total_cost
+                    'transaction_id' => $transaction->id,
+                    'crypto' => [
+                        'id' => $crypto->id,
+                        'symbol' => $crypto->symbol,
+                        'name' => $crypto->name,
+                        'price_achat' => $price,
+                        'quantite_achetee' => $quantity
                     ],
-                    'new_balance' => (float)$user->balance_eur,
+                    'achat' => [
+                        'type' => 'buy',
+                        'quantite' => $quantity,
+                        'prix_unitaire' => $price,
+                        'cout_total' => $total_cost,
+                        'date' => $transaction->created_at->format('Y-m-d H:i:s')
+                    ],
                     'holding' => [
-                        'quantity' => $new_quantity,
-                        'avg_buy_price' => $new_avg_price
+                        'quantite_totale' => $new_quantity,
+                        'prix_moyen' => $new_avg_price,
+                        'valeur_portefeuille' => $new_quantity * $crypto->current_price,
+                        'profit_loss' => ($crypto->current_price - $new_avg_price) * $new_quantity
+                    ],
+                    'portefeuille' => [
+                        'solde_eur' => (float)$wallet->balance,
+                        'ancien_solde' => $wallet_balance
                     ]
                 ]
             ], 201);
@@ -169,9 +197,8 @@ class WalletController extends Controller
     public function sell(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'cryptocurrency_id' => 'required|integer|exists:cryptos,id',
-            'quantity' => 'required|numeric|min:0.00000001',
-            'price' => 'required|numeric|min:0.01'
+            'cryptocurrency_id' => 'required|integer|exists:cryptocurrencies,id',
+            'quantity' => 'required|numeric|min:0.00000001'
         ]);
 
         if ($validator->fails()) {
@@ -185,7 +212,17 @@ class WalletController extends Controller
         $user = Auth::user();
         $wallet = $user->wallet;
         $quantity = (float)$request->quantity;
-        $price = (float)$request->price;
+        
+        // Récupérer le prix courant de la crypto
+        $crypto = Cryptocurrency::find($request->cryptocurrency_id);
+        if (!$crypto) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Crypto-monnaie non trouvée'
+            ], 404);
+        }
+        
+        $price = (float)$crypto->current_price;
         $total_revenue = $quantity * $price;
 
         // Vérifier le holding
@@ -196,14 +233,21 @@ class WalletController extends Controller
         if (!$holding || (float)$holding->quantity < $quantity) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Quantité insuffisante pour cette vente'
+                'message' => 'Quantité insuffisante pour cette vente',
+                'data' => [
+                    'quantite_possedee' => $holding ? (float)$holding->quantity : 0,
+                    'quantite_demandee' => $quantity
+                ]
             ], 400);
         }
 
         try {
-            // Créditer le compte
-            $user->balance_eur += $total_revenue;
-            $user->save();
+            $old_balance = (float)$wallet->balance;
+            $old_avg_price = (float)$holding->average_buy_price;
+            
+            // Créditer le portefeuille
+            $wallet->balance += $total_revenue;
+            $wallet->save();
 
             // Réduire le holding
             $new_quantity = (float)$holding->quantity - $quantity;
@@ -215,47 +259,68 @@ class WalletController extends Controller
             }
 
             // Créer la transaction
-            Transaction::create([
-                'user_id' => $user->id,
-                'cryptocurrency_id' => $request->cryptocurrency_id,
+            $transaction = Transaction::create([
+                'wallet_crypto_id' => $holding->id,
                 'type' => 'sell',
                 'quantity' => $quantity,
-                'price_at_transaction' => $price,
-                'eur_amount' => $total_revenue
+                'unit_price' => $price,
+                'total_price' => $total_revenue,
+                'status' => 'completed'
             ]);
+
+            // Calculer le profit/loss
+            $profit_loss = ($price - $old_avg_price) * $quantity;
+            $profit_loss_percentage = $old_avg_price > 0 ? (($price - $old_avg_price) / $old_avg_price) * 100 : 0;
 
             // Créer notification de vente
-            $crypto = \App\Models\Cryptocurrency::find($request->cryptocurrency_id);
-            \App\Models\Notification::create([
-                'user_id' => $user->id,
-                'type' => 'sell',
-                'title' => "Vente réussie - {$crypto->symbol}",
-                'message' => "Vous avez vendu {$quantity} {$crypto->symbol} à {$price}€ chacun (Total: {$total_revenue}€)"
-            ]);
-
-            // Notifier si solde trop bas
-            if ($user->balance_eur < 100) {
+            if ($crypto) {
                 \App\Models\Notification::create([
                     'user_id' => $user->id,
-                    'type' => 'low_balance',
-                    'title' => "Solde faible",
-                    'message' => "Votre solde EUR est maintenant de {$user->balance_eur}€"
+                    'message' => "Vente réussie - {$crypto->symbol}: {$quantity} unités à {$price}€ (Total: {$total_revenue}€)"
                 ]);
             }
 
+            // Notifier si solde trop bas
+            if ($wallet->balance < 100) {
+                \App\Models\Notification::create([
+                    'user_id' => $user->id,
+                    'message' => "Solde faible: Votre solde EUR est maintenant de {$wallet->balance}€"
+                ]);
+            }
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'Vente réussie',
                 'data' => [
-                    'transaction' => [
-                        'type' => 'sell',
-                        'quantity' => $quantity,
-                        'price' => $price,
-                        'total' => $total_revenue
+                    'transaction_id' => $transaction->id,
+                    'crypto' => [
+                        'id' => $crypto->id,
+                        'symbol' => $crypto->symbol,
+                        'name' => $crypto->name,
+                        'prix_vente' => $price,
+                        'quantite_vendue' => $quantity
                     ],
-                    'new_balance' => (float)$user->balance_eur,
-                    'remaining_quantity' => $new_quantity
+                    'vente' => [
+                        'type' => 'sell',
+                        'quantite' => $quantity,
+                        'prix_unitaire' => $price,
+                        'revenu_total' => $total_revenue,
+                        'date' => $transaction->created_at->format('Y-m-d H:i:s')
+                    ],
+                    'profit_loss' => [
+                        'montant' => $profit_loss,
+                        'pourcentage' => $profit_loss_percentage,
+                        'prix_achat_moyen' => $old_avg_price,
+                        'prix_vente' => $price
+                    ],
+                    'holding' => [
+                        'quantite_restante' => $new_quantity,
+                        'status' => $new_quantity > 0 ? 'actif' : 'liquidé'
+                    ],
+                    'portefeuille' => [
+                        'ancien_solde' => $old_balance,
+                        'nouveau_solde' => (float)$wallet->balance
+                    ]
                 ]
             ], 201);
         } catch (\Exception $e) {
@@ -266,3 +331,4 @@ class WalletController extends Controller
         }
     }
 }
+

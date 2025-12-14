@@ -66,35 +66,33 @@
           </thead>
           <tbody>
             <tr v-for="alert in filteredAlerts" :key="alert.id" class="border-b border-gray-100 hover:bg-gray-50 transition">
-              <td class="py-4 px-6 font-medium text-gray-800">{{ alert.user }}</td>
-              <td class="py-4 px-6 font-bold text-gray-800">{{ alert.crypto }}</td>
-              <td class="py-4 px-6 font-bold text-lg text-blue-600">{{ formatCurrency(alert.threshold) }}</td>
+              <td class="py-4 px-6 font-medium text-gray-800">{{ (alert.user && (alert.user.name || alert.user.email)) || 'N/A' }}</td>
+              <td class="py-4 px-6 font-bold text-gray-800">{{ (alert.crypto && (alert.crypto.symbol || alert.crypto.name)) || 'N/A' }}</td>
+              <td class="py-4 px-6 font-bold text-lg text-blue-600">{{ formatCurrency(alert.target_value ?? alert.threshold) }}</td>
               <td class="py-4 px-6">
                 <span
                   :class="[
                     'inline-block px-3 py-1 rounded-full text-xs font-medium',
-                    alert.type === '↑ Au-dessus'
+                    (alert.alert_type || alert.type) && String(alert.alert_type || alert.type).includes('↑')
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
                   ]"
                 >
-                  {{ alert.type }}
+                  {{ alert.alert_type ?? alert.type ?? '' }}
                 </span>
               </td>
-              <td class="py-4 px-6 text-gray-700">{{ formatCurrency(alert.currentPrice) }}</td>
+              <td class="py-4 px-6 text-gray-700">{{ formatCurrency(Number(alert.crypto?.current_price ?? alert.currentPrice ?? 0)) }}</td>
               <td class="py-4 px-6">
                 <span
                   :class="[
                     'inline-block px-3 py-1 rounded-full text-xs font-medium',
-                    alert.status === 'Active'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-yellow-100 text-yellow-800'
+                    isActive(alert) ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                   ]"
                 >
-                  {{ alert.status }}
+                  {{ alert.status || (isActive(alert) ? 'Active' : 'Pausée') }}
                 </span>
               </td>
-              <td class="py-4 px-6 text-gray-600 text-sm">{{ alert.createdAt }}</td>
+              <td class="py-4 px-6 text-gray-600 text-sm">{{ formatDate(alert.created_at || alert.createdAt || alert.createdAt) }}</td>
               <td class="py-4 px-6">
                 <div class="flex gap-2">
                   <button
@@ -104,7 +102,7 @@
                     ✏️ Modifier
                   </button>
                   <button
-                    v-if="alert.status === 'Active'"
+                    v-if="isActive(alert)"
                     @click="pauseAlert(alert.id)"
                     class="px-3 py-1 bg-orange-100 text-orange-600 rounded-lg text-xs font-medium hover:bg-orange-200 transition"
                   >
@@ -182,9 +180,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
-import axios from 'axios'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
+import api from '@/services/api'
+import { getAdminAlerts, deleteAdminAlert, resumeAdminAlert, type AdminAlert } from '@/services/adminApi'
 
 const filterUser = ref('')
 const filterCrypto = ref('')
@@ -197,88 +196,90 @@ const editForm = reactive({
   type: '↑ Au-dessus'
 })
 
+const isLoading = ref(false)
+const currentPage = ref(1)
+const perPage = ref(10)
+const alerts = ref<AdminAlert[]>([])
+const pagination = ref<any | null>(null)
+
 const stats = ref({
-  activeAlerts: 856,
-  triggeredToday: 12,
-  paused: 24
+  activeAlerts: 0,
+  triggeredToday: 0,
+  paused: 0
 })
 
-const alerts = ref([
-  {
-    id: 1,
-    user: 'chedi01',
-    crypto: 'BTC',
-    threshold: 80000,
-    type: '↑ Au-dessus',
-    currentPrice: 88000,
-    status: 'Active',
-    createdAt: '10/11/2025'
-  },
-  {
-    id: 2,
-    user: 'mariem02',
-    crypto: 'ETH',
-    threshold: 7000,
-    type: '↓ Au-dessous',
-    currentPrice: 6950,
-    status: 'Active',
-    createdAt: '11/11/2025'
-  },
-  {
-    id: 3,
-    user: 'ahmed03',
-    crypto: 'ADA',
-    threshold: 2000,
-    type: '↑ Au-dessus',
-    currentPrice: 1850,
-    status: 'Pausée',
-    createdAt: '09/11/2025'
-  },
-  {
-    id: 4,
-    user: 'zaineb04',
-    crypto: 'BTC',
-    threshold: 90000,
-    type: '↑ Au-dessus',
-    currentPrice: 88000,
-    status: 'Active',
-    createdAt: '12/11/2025'
+const pageNumbers = computed(() => {
+  if (!pagination.value) return []
+  const pages = []
+  const maxPages = Math.min(5, pagination.value.last_page || pagination.value.lastPage || 5)
+  let start = Math.max(1, currentPage.value - Math.floor(maxPages / 2))
+  let end = Math.min(pagination.value.last_page || pagination.value.lastPage || 1, start + maxPages - 1)
+  if (end - start + 1 < maxPages) {
+    start = Math.max(1, end - maxPages + 1)
   }
-])
+  for (let i = start; i <= end; i++) pages.push(i)
+  return pages
+})
 
 const filteredAlerts = computed(() => {
+  // server-side filters preferred; client filter as extra
   return alerts.value.filter(alert => {
-    const matchesUser = alert.user.toLowerCase().includes(filterUser.value.toLowerCase())
-    const matchesCrypto = !filterCrypto.value || alert.crypto === filterCrypto.value
-    const matchesStatus = !filterStatus.value || alert.status === filterStatus.value
+    const matchesUser = !filterUser.value || (alert.user && (alert.user.name || alert.user.email || '').toLowerCase().includes(filterUser.value.toLowerCase()))
+    const matchesCrypto = !filterCrypto.value || (alert.crypto && (alert.crypto.symbol || alert.crypto.name) === filterCrypto.value || (alert.crypto && (alert.crypto.symbol || '').toLowerCase() === filterCrypto.value.toLowerCase()))
+    const matchesStatus = !filterStatus.value || (String(alert.status).toLowerCase() === filterStatus.value.toLowerCase())
     return matchesUser && matchesCrypto && matchesStatus
   })
 })
 
-const formatCurrency = (value: number): string => {
+const formatCurrency = (value: number | string | undefined): string => {
+  const n = Number(value ?? 0)
+  const safe = Number.isFinite(n) ? n : 0
   return new Intl.NumberFormat('fr-TN', {
     style: 'currency',
     currency: 'TND',
     minimumFractionDigits: 2
-  }).format(value)
+  }).format(safe)
 }
+
+const formatDate = (dateString: string | undefined): string => {
+  if (!dateString) return ''
+  try {
+    const d = new Date(dateString)
+    return new Intl.DateTimeFormat('fr-FR', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+    }).format(d)
+  } catch {
+    return String(dateString)
+  }
+}
+
+const isActive = (alert: any): boolean => {
+  const s = String(alert?.status || '').toLowerCase()
+  return s === 'active' || s === '1' || s === 'true'
+}
+
+// react to filter changes
+watch([filterUser, filterCrypto, filterStatus], () => {
+  currentPage.value = 1
+  loadAlerts()
+})
 
 const editAlert = (alert: any) => {
   editingAlert.value = alert
-  editForm.threshold = alert.threshold
-  editForm.type = alert.type
+  editForm.threshold = alert.target_value ?? alert.threshold ?? 0
+  editForm.type = alert.alert_type ?? alert.type ?? '↑ Au-dessus'
   showEditModal.value = true
 }
 
 const updateAlert = async () => {
   try {
-    await axios.put(`/api/admin/alerts/${editingAlert.value.id}`, editForm)
+    await api.put(`/admin/alerts/${editingAlert.value.id}`, { threshold: editForm.threshold, type: editForm.type })
     const idx = alerts.value.findIndex(a => a.id === editingAlert.value.id)
     if (idx >= 0) {
       alerts.value[idx] = {
         ...alerts.value[idx],
-        threshold: editForm.threshold,
-        type: editForm.type
+        target_value: editForm.threshold,
+        alert_type: editForm.type
       }
     }
     showEditModal.value = false
@@ -289,7 +290,7 @@ const updateAlert = async () => {
 
 const pauseAlert = async (alertId: number) => {
   try {
-    await axios.post(`/api/admin/alerts/${alertId}/pause`)
+    await api.put(`/admin/alerts/${alertId}`, { status: 'paused' })
     const alert = alerts.value.find(a => a.id === alertId)
     if (alert) alert.status = 'Pausée'
   } catch (e) {
@@ -299,7 +300,8 @@ const pauseAlert = async (alertId: number) => {
 
 const resumeAlert = async (alertId: number) => {
   try {
-    await axios.post(`/api/admin/alerts/${alertId}/resume`)
+    // use adminApi helper if available
+    try { await resumeAdminAlert(alertId) } catch (_) { await api.put(`/admin/alerts/${alertId}`, { status: 'active' }) }
     const alert = alerts.value.find(a => a.id === alertId)
     if (alert) alert.status = 'Active'
   } catch (e) {
@@ -308,23 +310,44 @@ const resumeAlert = async (alertId: number) => {
 }
 
 const deleteAlert = async (alertId: number) => {
-  if (confirm('Êtes-vous sûr de vouloir supprimer cette alerte ?')) {
-    try {
-      await axios.delete(`/api/admin/alerts/${alertId}`)
-      alerts.value = alerts.value.filter(a => a.id !== alertId)
-    } catch (e) {
-      console.error('Error deleting alert:', e)
-    }
+  if (!confirm('Êtes-vous sûr de vouloir supprimer cette alerte ?')) return
+  try {
+    await deleteAdminAlert(alertId).catch(() => api.delete(`/admin/alerts/${alertId}`))
+    alerts.value = alerts.value.filter(a => a.id !== alertId)
+  } catch (e) {
+    console.error('Error deleting alert:', e)
+  }
+}
+
+const goToPage = (page: number) => {
+  if (page >= 1 && pagination.value && page <= (pagination.value.last_page || pagination.value.lastPage || 1)) {
+    currentPage.value = page
+    loadAlerts()
+  }
+}
+
+const loadAlerts = async () => {
+  isLoading.value = true
+  try {
+    const res = await getAdminAlerts(currentPage.value, perPage.value, filterStatus.value || undefined, filterUser.value || undefined, filterCrypto.value || undefined)
+    alerts.value = res.data || []
+    pagination.value = res.pagination || null
+
+    // compute stats
+    stats.value.activeAlerts = alerts.value.filter(a => String(a.status).toLowerCase() === 'active' || String(a.status).toLowerCase() === '1').length
+    stats.value.paused = alerts.value.filter(a => String(a.status).toLowerCase().includes('pause')).length
+    // triggeredToday: count by created_at on today
+    const todayKey = new Date().toISOString().split('T')[0]
+    stats.value.triggeredToday = alerts.value.filter(a => (a.created_at || '').split('T')[0] === todayKey).length
+  } catch (e) {
+    console.error('Error loading alerts:', e)
+  } finally {
+    isLoading.value = false
   }
 }
 
 onMounted(async () => {
-  try {
-    const response = await axios.get('/api/admin/alerts')
-    alerts.value = response.data
-  } catch (e) {
-    console.error('Error loading alerts:', e)
-  }
+  await loadAlerts()
 })
 </script>
 

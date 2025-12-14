@@ -43,9 +43,9 @@
                 v-model="form.crypto"
                 class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-base font-medium focus:border-primary focus:outline-none transition"
               >
-                <option value="Bitcoin">Bitcoin</option>
-                <option value="Ethereum">Ethereum</option>
-                <option value="Cardano">Cardano</option>
+                <option v-for="crypto in cryptoOptions" :key="crypto.id" :value="crypto.id.toString()">
+                  {{ crypto.name }} ({{ crypto.symbol }})
+                </option>
               </select>
             </div>
 
@@ -143,31 +143,52 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted } from 'vue'
+import { defineComponent, ref, onMounted, watch } from 'vue'
 import ClientSidebar from '../components/ClientSidebar.vue'
 import api from '../services/api'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 
 export default defineComponent({
   components: { ClientSidebar },
   setup() {
     const router = useRouter()
+    const route = useRoute()
     const userName = ref('Utilisateur')
+    const cryptoOptions = ref<any[]>([])
 
     const form = ref({
-      crypto: 'Bitcoin',
+      crypto: route.query.crypto_id ? route.query.crypto_id.toString() : '',
       quantity: '',
       amount: '',
-      currentPrice: '90 000',
+      currentPrice: '0',
       fees: '',
       total: ''
     })
 
     const loadData = async () => {
       try {
-        const profileRes = await api.get('/auth/profile')
-        if (profileRes.data) {
-          userName.value = profileRes.data.name || 'Utilisateur'
+        const [profileRes, cryptosRes] = await Promise.all([
+          api.get('/auth/profile'),
+          api.get('/cryptocurrencies')
+        ])
+        if (profileRes.data?.data) {
+          userName.value = profileRes.data.data.name || 'Utilisateur'
+        }
+        cryptoOptions.value = cryptosRes.data?.data || []
+        
+        // Set crypto from query parameter if provided
+        if (route.query.crypto_id) {
+          form.value.crypto = route.query.crypto_id.toString()
+        } else if (cryptoOptions.value.length > 0) {
+          form.value.crypto = cryptoOptions.value[0].id.toString()
+        }
+        
+        // Set current price for selected crypto
+        if (form.value.crypto) {
+          const selectedCrypto = cryptoOptions.value.find(c => c.id.toString() === form.value.crypto)
+          if (selectedCrypto) {
+            form.value.currentPrice = selectedCrypto.current_price?.toString() || selectedCrypto.price?.toString() || '0'
+          }
         }
       } catch (e) {
         console.error('Error loading profile:', e)
@@ -220,21 +241,41 @@ export default defineComponent({
 
         // Send to API
         const response = await api.post('/wallets/sell', {
-          crypto: form.value.crypto,
-          quantity: parseFloat(form.value.quantity),
-          amount: parseFloat(form.value.amount),
-          fees: parseFloat(form.value.fees)
+          cryptocurrency_id: parseInt(form.value.crypto),
+          quantity: parseFloat(form.value.quantity)
         })
 
         alert('Transaction confirmée! Email de confirmation envoyé.')
-        router.push('/transactions')
+        // Redirect to history page instead of transactions
+        router.push('/history')
       } catch (e) {
         console.error('Transaction error:', e)
         alert('Erreur lors de la transaction')
       }
     }
 
+    watch(() => form.value.crypto, () => {
+      const selectedCrypto = cryptoOptions.value.find(c => c.id.toString() === form.value.crypto)
+      if (selectedCrypto) {
+        form.value.currentPrice = selectedCrypto.current_price?.toString() || '0'
+        form.value.quantity = ''
+        form.value.amount = ''
+        form.value.fees = ''
+        form.value.total = ''
+      }
+    })
+
     onMounted(loadData)
+
+    return {
+      userName,
+      form,
+      cryptoOptions,
+      logout,
+      calculateTotal,
+      calculateQuantity,
+      submitTransaction
+    }
 
     return {
       userName,

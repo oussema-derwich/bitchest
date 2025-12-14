@@ -15,7 +15,7 @@ export default defineComponent({
   props: {
     data: { type: Array as () => any[], default: () => [] },
     labels: { type: Array as () => string[], default: () => [] },
-    period: { type: String, default: '24h' },
+    period: { type: [String, Number], default: '24h' },
     height: { type: Number, default: 200 }
   },
   setup(props) {

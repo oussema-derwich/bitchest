@@ -400,12 +400,13 @@ export default defineComponent({
 
     const loadUserData = async () => {
       try {
-        const [balanceRes, portfolioRes] = await Promise.all([
-          api.get('/user/balance'),
+        const [profileRes, portfolioRes] = await Promise.all([
+          api.get('/auth/me'),
           api.get('/portfolio')
         ])
-        userBalance.value = balanceRes.data.balance
-        const cryptoAsset = portfolioRes.data.find(
+        userBalance.value = profileRes.data.data?.balance_eur || 0
+        const holdings = portfolioRes.data.data?.holdings || []
+        const cryptoAsset = holdings.find(
           (asset: any) => asset.crypto_id === crypto.value?.id
         )
         availableQuantity.value = cryptoAsset?.quantity || 0
@@ -420,8 +421,8 @@ export default defineComponent({
           api.get(`/cryptos/${route.params.id}`),
           api.get('/alerts', { params: { crypto_id: route.params.id } })
         ])
-        crypto.value = cryptoRes.data
-        userAlerts.value = alertsRes.data
+        crypto.value = cryptoRes.data.data || cryptoRes.data
+        userAlerts.value = alertsRes.data.data || alertsRes.data
         await loadUserData()
       } catch (error) {
         console.error('Erreur lors du chargement des données:', error)
@@ -639,7 +640,8 @@ export default defineComponent({
       try {
         const days = period === '7J' ? 7 : period === '30J' ? 30 : 90
         const response = await api.get(`/cryptos/${route.params.id}/history/${days}`)
-        initChart(response.data)
+        const historyData = response.data.data?.history || response.data.data
+        initChart(historyData)
       } catch (error) {
         console.error('Erreur lors du chargement de l\'historique:', error)
       }

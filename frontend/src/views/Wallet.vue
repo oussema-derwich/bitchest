@@ -400,13 +400,13 @@ export default defineComponent({
       try {
         const [assetsResponse, historyResponse, cryptosResponse] = await Promise.all([
           api.get('/portfolio'),
-          api.get(`/portfolio/history?period=${selectedPeriod}`),
+          api.get(`/portfolio/history?period=${selectedPeriod.value}`),
           api.get('/cryptos/count')
         ])
         
-        assets.value = assetsResponse.data
-        historyData.value = historyResponse.data
-        totalCryptos.value = cryptosResponse.data.count
+        assets.value = assetsResponse.data.data.holdings || []
+        historyData.value = historyResponse.data.data.history || []
+        totalCryptos.value = cryptosResponse.data.data.count || 0
       } catch (error) {
         console.error('Erreur lors du chargement des données:', error)
       }
@@ -416,7 +416,7 @@ export default defineComponent({
       selectedPeriod.value = period
       try {
         const response = await api.get(`/portfolio/history?period=${period}`)
-        historyData.value = response.data
+        historyData.value = response.data.data.history || []
       } catch (error) {
         console.error('Erreur lors du chargement de l\'historique:', error)
       }
@@ -461,7 +461,7 @@ export default defineComponent({
       try {
         await api.post('/transactions', {
           type: 'sell',
-          crypto_id: selectedAsset.value.crypto_id,
+          cryptocurrency_id: selectedAsset.value.crypto_id,
           quantity: quickSellForm.value.quantity
         })
         closeQuickSellModal()

@@ -10,38 +10,27 @@ class PriceHistory extends Model
 {
     use HasFactory;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<string>
-     */
     protected $fillable = [
         'cryptocurrency_id',
-        'price'
+        'value'
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
-        'price' => 'decimal:2',
+        'value' => 'decimal:2',
         'created_at' => 'datetime'
     ];
 
     /**
-     * The table associated with the model.
-     *
-     * @var string
+     * Table name
      */
     protected $table = 'price_histories';
 
     /**
-     * Get the cryptocurrency.
+     * Relation: PriceHistory appartient à une Cryptocurrency
      */
     public function cryptocurrency(): BelongsTo
     {
         return $this->belongsTo(Cryptocurrency::class);
     }
 }
+

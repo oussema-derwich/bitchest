@@ -235,7 +235,7 @@ export default defineComponent({
     const loadFavorites = async () => {
       try {
         const response = await api.get('/favorites')
-        favoritesCryptos.value = response.data
+        favoritesCryptos.value = response.data.data || response.data
       } catch (error) {
         console.error('Erreur lors du chargement des favoris:', error)
       }

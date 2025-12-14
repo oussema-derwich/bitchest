@@ -25,11 +25,12 @@ class User extends Authenticatable implements JWTSubject
         'email',
         'password',
         'role',
-        'balance_eur',
         'temp_password',
         'is_active',
         'login_attempts',
-        'last_login_attempt'
+        'last_login_attempt',
+        'avatar',
+        'photo',
     ];
 
     /**
@@ -53,7 +54,6 @@ class User extends Authenticatable implements JWTSubject
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
-            'balance_eur' => 'decimal:2',
             'login_attempts' => 'integer',
             'last_login_attempt' => 'datetime',
         ];
@@ -80,7 +80,7 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Get the wallet for the user.
+     * Get the wallet for the user (one wallet per user).
      */
     public function wallet()
     {
@@ -88,27 +88,35 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Get the wallets for the user.
+     * Get the registration request for the user (one request per user).
      */
-    public function wallets()
+    public function registrationRequest()
     {
-        return $this->hasMany(Wallet::class);
+        return $this->hasOne(RegistrationRequest::class);
     }
 
     /**
-     * Get the transactions for the user.
+     * Get the transactions through wallet for the user.
      */
     public function transactions()
     {
-        return $this->hasMany(Transaction::class);
+        return $this->hasManyThrough(Transaction::class, Wallet::class);
     }
 
     /**
      * Get the notifications for the user.
      */
-    public function notifications()
+    public function notifications(): HasMany
     {
         return $this->hasMany(Notification::class);
+    }
+
+    /**
+     * Get the favorites for the user.
+     */
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(Favorite::class);
     }
 
     /**

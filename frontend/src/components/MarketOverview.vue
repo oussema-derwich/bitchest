@@ -137,7 +137,7 @@ export default defineComponent({
     const loadMarketData = async () => {
       try {
         const response = await api.get('/cryptos/market')
-        cryptos.value = response.data
+        cryptos.value = response.data.data || response.data
       } catch (error) {
         console.error('Erreur lors du chargement des données du marché:', error)
       }

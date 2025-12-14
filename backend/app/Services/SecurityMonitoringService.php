@@ -43,7 +43,11 @@ class SecurityMonitoringService
 
     private function getRecentTransactions($userId)
     {
-        return Transaction::where('user_id', $userId)
+        $wallet = \App\Models\User::find($userId)->wallet;
+        if (!$wallet) return 0;
+        
+        $walletCryptoIds = $wallet->walletCryptos()->pluck('id');
+        return Transaction::whereIn('wallet_crypto_id', $walletCryptoIds)
             ->where('created_at', '>=', now()->subHour())
             ->count();
     }

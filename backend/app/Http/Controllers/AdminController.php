@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Wallet;
 use App\Models\Transaction;
 use App\Models\Crypto;
-use App\Models\Alert;
+use App\Models\Cryptocurrency;
+use App\Models\Notification;
+use App\Models\RegistrationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -23,7 +26,7 @@ class AdminController extends Controller
                 'totalUsers' => User::count(),
                 'newUsersThisWeek' => User::where('created_at', '>=', now()->subWeek())->count(),
                 'totalTransactions' => Transaction::count(),
-                'totalAlerts' => Alert::count(),
+                'totalAlerts' => Notification::count(),
                 'totalCryptos' => \App\Models\Cryptocurrency::count(),
             ]
         ]);
@@ -102,8 +105,15 @@ class AdminController extends Controller
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
             'role' => $validated['role'],
-            'balance_eur' => 500,
             'is_active' => true
+        ]);
+
+        // Create wallet with initial balance
+        Wallet::create([
+            'user_id' => $user->id,
+            'balance' => 500,
+            'public_address' => 'public_' . uniqid(),
+            'private_address' => 'private_' . uniqid(),
         ]);
 
         return response()->json([
@@ -195,21 +205,49 @@ class AdminController extends Controller
      */
     public function getTransactions(Request $request)
     {
-        $query = Transaction::query();
+        try {
+            $query = Transaction::with(['walletCrypto.wallet.user', 'walletCrypto.cryptocurrency']);
 
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->input('user_id'));
+            if ($request->filled('user_id')) {
+                $query->whereHas('walletCrypto.wallet', function($q) {
+                    $q->where('user_id', request()->input('user_id'));
+                });
+            }
+
+            if ($request->filled('type')) {
+                $query->where('type', $request->input('type'));
+            }
+
+            if ($request->filled('cryptocurrency_id')) {
+                $query->whereHas('walletCrypto', function($q) {
+                    $q->where('cryptocurrency_id', request()->input('cryptocurrency_id'));
+                });
+            }
+
+            $page = $request->input('page', 1);
+            $per_page = $request->input('per_page', 10);
+
+            $transactions = $query->orderBy('created_at', 'desc')
+                ->paginate($per_page, ['*'], 'page', $page);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $transactions->items(),
+                'pagination' => [
+                    'current_page' => $transactions->currentPage(),
+                    'per_page' => $transactions->perPage(),
+                    'total' => $transactions->total(),
+                    'last_page' => $transactions->lastPage(),
+                    'from' => $transactions->firstItem(),
+                    'to' => $transactions->lastItem(),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error loading transactions: ' . $e->getMessage()
+            ], 500);
         }
-
-        if ($request->filled('type')) {
-            $query->where('type', $request->input('type'));
-        }
-
-        if ($request->filled('crypto_id')) {
-            $query->where('crypto_id', $request->input('crypto_id'));
-        }
-
-        return response()->json($query->orderBy('created_at', 'desc')->get());
     }
 
     /**
@@ -227,7 +265,7 @@ class AdminController extends Controller
      */
     public function getAlerts(Request $request)
     {
-        $query = Alert::query();
+        $query = Notification::query();
 
         if ($request->filled('user_id')) {
             $query->where('user_id', $request->input('user_id'));
@@ -251,7 +289,7 @@ class AdminController extends Controller
             'status' => 'string'
         ]);
 
-        $alert = Alert::findOrFail($alertId);
+        $alert = Notification::findOrFail($alertId);
         $alert->update($validated);
         return response()->json($alert);
     }
@@ -261,19 +299,30 @@ class AdminController extends Controller
      */
     public function pauseAlert($alertId)
     {
-        $alert = Alert::findOrFail($alertId);
-        $alert->update(['status' => 'paused']);
+        $alert = Notification::findOrFail($alertId);
+        $alert->update(['is_read' => true]);
         return response()->json(['message' => 'Alert paused successfully']);
     }
 
     /**
      * Resume an alert
      */
-    public function resumeAlert($alertId)
+    public function resumeAlert($id)
     {
-        $alert = Alert::findOrFail($alertId);
-        $alert->update(['status' => 'active']);
-        return response()->json(['message' => 'Alert resumed successfully']);
+        try {
+            $alert = Notification::findOrFail($id);
+            $alert->update(['status' => 'active']);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Alert resumed successfully',
+                'data' => $alert
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error resuming alert: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -281,7 +330,7 @@ class AdminController extends Controller
      */
     public function deleteAlert($alertId)
     {
-        Alert::findOrFail($alertId)->delete();
+        Notification::findOrFail($alertId)->delete();
         return response()->json(['message' => 'Alert deleted successfully']);
     }
 
@@ -345,4 +394,195 @@ class AdminController extends Controller
             'notifyAlerts' => true
         ]);
     }
+
+    /**
+     * Update settings
+     */
+    public function updateSettings(Request $request)
+    {
+        $settings = $request->validate([
+            'platformName' => 'nullable|string',
+            'description' => 'nullable|string',
+            'supportEmail' => 'nullable|email',
+            'requireTwoFA' => 'nullable|boolean',
+            'sessionTimeout' => 'nullable|integer',
+            'requireStrongPassword' => 'nullable|boolean',
+            'notifyNewUsers' => 'nullable|boolean',
+            'notifyTransactions' => 'nullable|boolean',
+            'notifyAlerts' => 'nullable|boolean'
+        ]);
+
+        // Store settings (you can use cache or database)
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Settings updated successfully',
+            'data' => $settings
+        ]);
+    }
+
+    /**
+     * Get all pending registration requests
+     */
+    public function getRegistrationRequests(Request $request)
+    {
+        $query = RegistrationRequest::with('user');
+
+        if ($request->filled('status')) {
+            $status = $request->input('status');
+            if ($status === 'pending') {
+                $query->where('is_approved', false)->where('is_rejected', false);
+            } elseif ($status === 'approved') {
+                $query->where('is_approved', true);
+            } elseif ($status === 'rejected') {
+                $query->where('is_rejected', true);
+            }
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $query->get()
+        ]);
+    }
+
+    /**
+     * Approve a registration request
+     */
+    public function approveRegistrationRequest($requestId)
+    {
+        $registrationRequest = RegistrationRequest::findOrFail($requestId);
+        
+        if ($registrationRequest->is_approved) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Request already approved'
+            ], 400);
+        }
+
+        // Mark request as approved
+        $registrationRequest->update(['is_approved' => true]);
+
+        // Get the associated user
+        $user = $registrationRequest->user;
+
+        // If user exists, activate safely, create wallet if needed, and notify
+        if ($user) {
+            // Activate the user account
+            $user->is_active = true;
+            $user->save();
+
+            // Create wallet for the user if it doesn't exist
+            if (!$user->wallet) {
+                Wallet::create([
+                    'user_id' => $user->id,
+                    'balance' => 1000 // Starting balance in EUR
+                ]);
+            }
+
+            // Send notification to user
+            Notification::create([
+                'user_id' => $user->id,
+                'message' => 'Your registration has been approved! You can now login and start trading.',
+                'is_read' => false
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Registration request approved successfully',
+            'data' => $registrationRequest
+        ]);
+    }
+
+    /**
+     * Reject a registration request
+     */
+    public function rejectRegistrationRequest($requestId, Request $request)
+    {
+        $registrationRequest = RegistrationRequest::findOrFail($requestId);
+        
+        if ($registrationRequest->is_rejected) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Request already rejected'
+            ], 400);
+        }
+
+        $reason = $request->input('reason', 'Your registration request has been rejected.');
+
+        // Mark request as rejected
+        $registrationRequest->update(['is_rejected' => true]);
+
+        // Send notification to user
+        Notification::create([
+            'user_id' => $registrationRequest->user_id,
+            'message' => $reason,
+            'is_read' => false
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Registration request rejected successfully',
+            'data' => $registrationRequest
+        ]);
+    }
+
+    /**
+     * Get recent activities
+     */
+    public function getActivities(Request $request)
+    {
+        try {
+            $limit = $request->input('limit', 10);
+            
+            $transactions = Transaction::with(['walletCrypto.wallet.user', 'walletCrypto.cryptocurrency'])
+                ->orderBy('created_at', 'desc')
+                ->limit($limit)
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $transactions
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error fetching activities: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get transaction chart data
+     */
+    public function getChartData(Request $request)
+    {
+        try {
+            $period = $request->input('period', 7); // days
+            $startDate = now()->subDays($period);
+
+            $data = Transaction::select(
+                \DB::raw('DATE(created_at) as date'),
+                \DB::raw('COUNT(*) as count'),
+                \DB::raw('SUM(total_price) as total'),
+                'type'
+            )
+            ->where('created_at', '>=', $startDate)
+            ->groupBy('date', 'type')
+            ->orderBy('date')
+            ->get()
+            ->groupBy('type');
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $data,
+                'period' => $period
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error fetching chart data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }
+

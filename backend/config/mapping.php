@@ -50,12 +50,11 @@ return [
                 ],
             ],
             'attributes' => [
-                'fillable' => ['name', 'email', 'password', 'role', 'balance_eur', 'is_active'],
+                'fillable' => ['name', 'email', 'password', 'role', 'is_active', 'photo', 'avatar'],
                 'hidden' => ['password', 'remember_token'],
                 'casts' => [
                     'email_verified_at' => 'datetime',
                     'is_active' => 'boolean',
-                    'balance_eur' => 'decimal:2',
                 ],
             ],
         ],
@@ -85,10 +84,9 @@ return [
                 ],
             ],
             'attributes' => [
-                'fillable' => ['user_id', 'name', 'balance_eur', 'total_invested'],
+                'fillable' => ['user_id', 'balance', 'public_address', 'private_address'],
                 'casts' => [
-                    'balance_eur' => 'decimal:2',
-                    'total_invested' => 'decimal:2',
+                    'balance' => 'decimal:2',
                 ],
             ],
         ],
@@ -325,20 +323,20 @@ return [
 
     'transformations' => [
         'user' => [
-            'public' => ['id', 'name', 'email', 'role', 'created_at'],
-            'private' => ['id', 'name', 'email', 'role', 'balance_eur', 'is_active', 'created_at', 'updated_at'],
+            'public' => ['id', 'name', 'email', 'role', 'avatar', 'created_at'],
+            'private' => ['id', 'name', 'email', 'role', 'is_active', 'avatar', 'photo', 'created_at', 'updated_at'],
         ],
         'wallet' => [
-            'default' => ['id', 'name', 'balance_eur', 'total_invested', 'user_id'],
-            'detailed' => ['id', 'name', 'balance_eur', 'total_invested', 'user_id', 'cryptocurrencies', 'transactions'],
+            'default' => ['id', 'balance', 'user_id', 'public_address'],
+            'detailed' => ['id', 'balance', 'user_id', 'public_address', 'walletCryptos', 'transactions'],
         ],
         'cryptocurrency' => [
             'list' => ['id', 'symbol', 'name', 'current_price'],
             'detailed' => ['id', 'symbol', 'name', 'current_price', 'market_cap', 'volume_24h', 'priceHistories'],
         ],
         'transaction' => [
-            'summary' => ['id', 'type', 'amount', 'price_at_transaction', 'created_at'],
-            'detailed' => ['id', 'user_id', 'wallet_id', 'cryptocurrency_id', 'type', 'amount', 'price_at_transaction', 'created_at'],
+            'summary' => ['id', 'type', 'quantity', 'unit_price', 'total_price', 'status', 'created_at'],
+            'detailed' => ['id', 'wallet_crypto_id', 'type', 'quantity', 'unit_price', 'total_price', 'status', 'created_at'],
         ],
     ],
 

@@ -135,15 +135,16 @@ export default defineComponent({
     const load = async () => {
       try {
         const res = await api.get('/transactions')
-        transactions.value = res.data
+        // API returns {status, data: [...], statistiques: {...}}
+        transactions.value = res.data.data || res.data
         // Extract unique crypto symbols
-        cryptos.value = [...new Set(transactions.value.map(t => t.crypto))]
+        cryptos.value = [...new Set(transactions.value.map(t => t.crypto?.symbol || t.crypto))]
       } catch (e) {
         console.error('Error loading transactions:', e)
         // Demo data
         transactions.value = [
-          { id: 1, date: '2025-01-01', type: 'buy', crypto: 'BTC', quantity: 0.01, price: 48000 },
-          { id: 2, date: '2025-01-02', type: 'sell', crypto: 'ETH', quantity: 0.1, price: 3200 }
+          { id: 1, date: '2025-01-01', type: 'buy', crypto: { symbol: 'BTC' }, transaction: { quantite: 0.01, prix_unitaire: 48000, montant_eur: 480 } },
+          { id: 2, date: '2025-01-02', type: 'sell', crypto: { symbol: 'ETH' }, transaction: { quantite: 0.1, prix_unitaire: 3200, montant_eur: 320 } }
         ]
         cryptos.value = ['BTC', 'ETH']
       }

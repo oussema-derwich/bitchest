@@ -36,11 +36,14 @@
 
 <script lang="ts">
 import { defineComponent, ref } from 'vue'
-import api from '../services/api'
-import router from '../router'
+import { useRouter } from 'vue-router'
+import { register } from '../services/auth'
+import { createRegistrationRequest } from '../services/registrationApi'
+import { formatApiError, isValidationError, getFieldError } from '../services/errorHandler'
 
 export default defineComponent({
   setup() {
+    const router = useRouter()
     const name = ref('')
     const email = ref('')
     const password = ref('')
@@ -51,36 +54,45 @@ export default defineComponent({
     const errors = ref<Record<string, string[] | undefined> | null>(null)
 
     const submit = async () => {
-      if (isLoading.value) return // Empêcher les clics multiples
-      
+      if (isLoading.value) return
+
       error.value = ''
       success.value = ''
+      errors.value = null
+
+      // Validate password match
       if (password.value !== password_confirmation.value) {
         error.value = 'Les mots de passe ne correspondent pas.'
         return
       }
+
+      // Validate password length
+      if (password.value.length < 6) {
+        error.value = 'Le mot de passe doit contenir au moins 6 caractères.'
+        return
+      }
+
       isLoading.value = true
+
       try {
-        // reset previous errors
-        errors.value = null
-        await api.post('/auth/register', { name: name.value, email: email.value, password: password.value, password_confirmation: password_confirmation.value })
-        success.value = 'Compte créé avec succès !'
-        setTimeout(() => router.push({ name: 'Login' }), 1200)
-      } catch (e: any) {
-        const resp = e?.response?.data
-        if (resp) {
-          if (resp.errors) {
-            // keep structured errors for per-field display
-            errors.value = resp.errors
-            // also set a general message
-            error.value = resp.message || 'Erreur de validation.'
-          } else {
-            error.value = resp.message || 'Erreur lors de la création du compte.'
-          }
-        } else {
-          error.value = 'Erreur lors de la création du compte.'
+        // Registration request with automatic client role
+        const response = await createRegistrationRequest({
+          name: name.value,
+          email: email.value,
+          password: password.value,
+          password_confirmation: password_confirmation.value,
+          role: 'client' // Automatically set to client
+        })
+
+        success.value = 'Demande d\'inscription créée avec succès! En attente d\'approbation admin.'
+        setTimeout(() => router.push({ name: 'Login' }), 2000)
+      } catch (err: any) {
+        const apiError = formatApiError(err)
+        error.value = apiError.message || 'Erreur lors de l\'inscription.'
+        if (isValidationError(err)) {
+          errors.value = apiError.errors
         }
-        console.error('Register error', e)
+      } finally {
         isLoading.value = false
       }
     }

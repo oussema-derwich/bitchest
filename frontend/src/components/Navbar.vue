@@ -145,7 +145,7 @@
 <script lang="ts">
 import { defineComponent, ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { currentUser, isAuthenticated, clearAuth } from '../services/auth'
+import { currentUser, isAuthenticated, logout } from '../services/auth'
 
 export default defineComponent({
   name: 'Navbar',
@@ -185,8 +185,12 @@ export default defineComponent({
       adminPaths.some(p => route.path.startsWith(p))
     )
 
-    const handleLogout = () => {
-      clearAuth()
+    const handleLogout = async () => {
+      try {
+        await logout()
+      } catch (e) {
+        console.error('Logout error:', e)
+      }
       isMenuOpen.value = false
       showProfileMenu.value = false
       router.push('/')

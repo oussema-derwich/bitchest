@@ -42,7 +42,7 @@
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Crypto</label>
               <select
-                v-model="newAlert.crypto"
+                v-model="newAlert.crypto_id"
                 class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg font-medium focus:border-primary focus:outline-none transition"
               >
                 <option value="">Sélectionner...</option>
@@ -54,7 +54,7 @@
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Seuil (DT)</label>
               <input
-                v-model="newAlert.threshold"
+                v-model="newAlert.price_threshold"
                 type="number"
                 placeholder="Ex: 85000"
                 class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg font-medium focus:border-primary focus:outline-none transition"
@@ -197,6 +197,10 @@ interface Alert {
   crypto: string
   threshold: string
   status: string
+  crypto_id?: number | string
+  price_threshold?: number
+  is_active?: boolean
+  type?: string
 }
 
 export default defineComponent({
@@ -206,33 +210,47 @@ export default defineComponent({
     const userName = ref('Utilisateur')
     const showNewAlertForm = ref(false)
     const showEditAlertForm = ref(false)
-    const newAlert = ref({ crypto: '', threshold: '' })
+    const cryptocurrencies = ref<any[]>([])
+    const newAlert = ref({ crypto_id: '', price_threshold: '', type: 'above' })
     const editingAlert = ref<Alert>({ id: 0, crypto: '', threshold: '', status: '' })
     const editingAlertId = ref<number | null>(null)
-
-    const alerts = ref<Alert[]>([
-      {
-        id: 1,
-        crypto: 'Bitcoin',
-        threshold: '80 000',
-        status: 'Activée'
-      },
-      {
-        id: 2,
-        crypto: 'Ethereum',
-        threshold: '7 500',
-        status: 'Activée'
-      }
-    ])
+    const alerts = ref<Alert[]>([])
 
     const loadData = async () => {
       try {
+        // Load profile
         const profileRes = await api.get('/auth/profile')
-        if (profileRes.data) {
-          userName.value = profileRes.data.name || 'Utilisateur'
+        const profile = profileRes.data?.data || profileRes.data
+        if (profile) {
+          userName.value = profile.name || 'Utilisateur'
+        }
+
+        // Load cryptocurrencies
+        const cryptoRes = await api.get('/cryptocurrencies')
+        if (cryptoRes.data) {
+          cryptocurrencies.value = Array.isArray(cryptoRes.data) ? cryptoRes.data : cryptoRes.data.data || []
+        }
+
+        // Load alerts
+        const alertsRes = await api.get('/alerts')
+        if (alertsRes.data) {
+          const alertsData = Array.isArray(alertsRes.data) ? alertsRes.data : alertsRes.data.data || []
+          alerts.value = alertsData.map((alert: any) => {
+            const threshold = parseFloat(alert.price_threshold)
+            return {
+              id: alert.id,
+              crypto: alert.crypto?.symbol || 'Unknown',
+              threshold: !isNaN(threshold) ? threshold.toFixed(2) : '0.00',
+              status: alert.is_active ? 'Activée' : 'Désactivée',
+              crypto_id: alert.crypto_id,
+              price_threshold: !isNaN(threshold) ? threshold : 0,
+              is_active: alert.is_active,
+              type: alert.type
+            }
+          })
         }
       } catch (e) {
-        console.error('Error loading profile:', e)
+        console.error('Error loading data:', e)
       }
     }
 
@@ -248,26 +266,53 @@ export default defineComponent({
       }
     }
 
-    const createAlert = () => {
-      if (newAlert.value.crypto && newAlert.value.threshold) {
-        const alert: Alert = {
-          id: alerts.value.length + 1,
-          crypto: newAlert.value.crypto,
-          threshold: newAlert.value.threshold,
-          status: 'Activée'
+    const createAlert = async () => {
+      if (newAlert.value.crypto_id && newAlert.value.price_threshold) {
+        try {
+          const response = await api.post('/alerts', {
+            cryptocurrency_id: newAlert.value.crypto_id,
+            price_threshold: parseFloat(newAlert.value.price_threshold),
+            type: newAlert.value.type
+          })
+          
+          if (response.data && response.data.alert) {
+            const alert = response.data.alert
+            alerts.value.push({
+              id: alert.id,
+              crypto: cryptocurrencies.value.find(c => c.id === alert.cryptocurrency_id)?.symbol || '',
+              threshold: alert.price_threshold.toFixed(2),
+              status: 'Activée',
+              crypto_id: alert.cryptocurrency_id,
+              price_threshold: alert.price_threshold,
+              is_active: alert.is_active,
+              type: alert.type
+            })
+            newAlert.value = { crypto_id: '', price_threshold: '', type: 'above' }
+            showNewAlertForm.value = false
+          }
+        } catch (e) {
+          console.error('Error creating alert:', e)
+          alert('Erreur lors de la création de l\'alerte')
         }
-        alerts.value.push(alert)
-        newAlert.value = { crypto: '', threshold: '' }
-        showNewAlertForm.value = false
       }
     }
 
-    const disableAlert = (alert: Alert) => {
-      alert.status = 'Désactivée'
+    const disableAlert = async (alert: Alert) => {
+      try {
+        await api.put(`/alerts/${alert.id}`, { is_active: false })
+        alert.status = 'Désactivée'
+      } catch (e) {
+        console.error('Error disabling alert:', e)
+      }
     }
 
-    const enableAlert = (alert: Alert) => {
-      alert.status = 'Activée'
+    const enableAlert = async (alert: Alert) => {
+      try {
+        await api.put(`/alerts/${alert.id}`, { is_active: true })
+        alert.status = 'Activée'
+      } catch (e) {
+        console.error('Error enabling alert:', e)
+      }
     }
 
     const editAlert = (alert: Alert) => {
@@ -276,22 +321,35 @@ export default defineComponent({
       showEditAlertForm.value = true
     }
 
-    const saveEditedAlert = () => {
+    const saveEditedAlert = async () => {
       if (editingAlert.value.crypto && editingAlert.value.threshold && editingAlertId.value) {
-        const index = alerts.value.findIndex((a) => a.id === editingAlertId.value)
-        if (index > -1) {
-          alerts.value[index] = { ...editingAlert.value }
+        try {
+          await api.put(`/alerts/${editingAlertId.value}`, {
+            price_threshold: parseFloat(editingAlert.value.threshold)
+          })
+          
+          const index = alerts.value.findIndex((a) => a.id === editingAlertId.value)
+          if (index > -1) {
+            alerts.value[index] = { ...editingAlert.value }
+          }
+          showEditAlertForm.value = false
+          editingAlert.value = { id: 0, crypto: '', threshold: '', status: '' }
+          editingAlertId.value = null
+        } catch (e) {
+          console.error('Error saving alert:', e)
         }
-        showEditAlertForm.value = false
-        editingAlert.value = { id: 0, crypto: '', threshold: '', status: '' }
-        editingAlertId.value = null
       }
     }
 
-    const deleteAlert = (alert: Alert) => {
-      const index = alerts.value.findIndex((a) => a.id === alert.id)
-      if (index > -1) {
-        alerts.value.splice(index, 1)
+    const deleteAlert = async (alert: Alert) => {
+      try {
+        await api.delete(`/alerts/${alert.id}`)
+        const index = alerts.value.findIndex((a) => a.id === alert.id)
+        if (index > -1) {
+          alerts.value.splice(index, 1)
+        }
+      } catch (e) {
+        console.error('Error deleting alert:', e)
       }
     }
 
@@ -303,6 +361,7 @@ export default defineComponent({
       showEditAlertForm,
       newAlert,
       editingAlert,
+      cryptocurrencies,
       alerts,
       logout,
       createAlert,

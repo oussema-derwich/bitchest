@@ -12,21 +12,22 @@ class Notification extends Model
 
     protected $fillable = [
         'user_id',
-        'title',
         'message',
-        'type',
-        'is_read',
-        'read_at'
+        'is_read'
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
-        'read_at' => 'datetime',
         'created_at' => 'datetime'
     ];
 
     /**
-     * Get the user that owns this notification.
+     * Table name
+     */
+    protected $table = 'notifications';
+
+    /**
+     * Relation: Notification appartient à un User
      */
     public function user(): BelongsTo
     {
@@ -34,13 +35,35 @@ class Notification extends Model
     }
 
     /**
-     * Mark notification as read.
+     * Mark notification as read
      */
     public function markAsRead(): void
     {
-        $this->update([
-            'is_read' => true,
-            'read_at' => now()
-        ]);
+        $this->update(['is_read' => true]);
+    }
+
+    /**
+     * Mark notification as unread
+     */
+    public function markAsUnread(): void
+    {
+        $this->update(['is_read' => false]);
+    }
+
+    /**
+     * Check if notification is read
+     */
+    public function isRead(): bool
+    {
+        return $this->is_read;
+    }
+
+    /**
+     * Get unread notifications
+     */
+    public static function unread()
+    {
+        return self::where('is_read', false);
     }
 }
+

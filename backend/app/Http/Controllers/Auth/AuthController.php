@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
@@ -22,38 +24,14 @@ class AuthController extends Controller
     }
 
     /**
-     * Register a new user.
+     * Register a new user (deprecated - use registration request instead)
      */
     public function register(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|between:2,100',
-            'email' => 'required|string|email|max:100|unique:users',
-            'password' => 'required|string|min:8|confirmed',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Erreur de validation',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => 'client',
-            'balance_eur' => 500,
-            'is_active' => true
-        ]);
-
         return response()->json([
-            'status' => 'success',
-            'message' => 'Utilisateur créé avec succès',
-            'user' => $user
-        ], 201);
+            'status' => 'error',
+            'message' => 'L\'inscription directe est désactivée. Utilisez la demande d\'inscription.',
+        ], 403);
     }
 
     /**
@@ -61,63 +39,97 @@ class AuthController extends Controller
      */
     public function login(Request $request): JsonResponse
     {
-        \Log::info('Tentative de connexion', ['email' => $request->email]);
-        
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'password' => 'required|string',
-        ]);
+        try {
+            \Log::info('Tentative de connexion', ['email' => $request->email]);
+            
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email',
+                'password' => 'required|string',
+            ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Erreur de validation',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Erreur de validation',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
 
-        $user = User::where('email', $request->email)->first();
+            // Get user directly with simple query
+            $userRecord = \DB::table('users')->where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            if ($user) {
-                $user->increment('login_attempts');
-                $user->last_login_attempt = Carbon::now();
-                $user->save();
+            if (!$userRecord || !Hash::check($request->password, $userRecord->password)) {
+                if ($userRecord) {
+                    \DB::table('users')->where('id', $userRecord->id)->increment('login_attempts');
 
-                if ($user->login_attempts >= 3) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => 'Compte temporairement bloqué. Réessayez plus tard.'
-                    ], 401);
+                    if ($userRecord->login_attempts >= 3) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Compte temporairement bloqué. Réessayez plus tard.'
+                        ], 401);
+                    }
                 }
+
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Identifiants non valides'
+                ], 401);
+            }
+
+            if (!$userRecord->is_active) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Compte désactivé'
+                ], 401);
+            }
+
+            // Reset login attempts
+            \DB::table('users')->where('id', $userRecord->id)->update([
+                'login_attempts' => 0,
+                'last_login_attempt' => Carbon::now()
+            ]);
+
+            // Now get the Eloquent model for token generation
+            $user = User::find($userRecord->id);
+            
+            // Créer token Sanctum
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            // Préparer les données utilisateur avec avatar URL complète
+            $userData = [
+                'id' => $userRecord->id,
+                'name' => $userRecord->name,
+                'email' => $userRecord->email,
+                'role' => $userRecord->role,
+                'is_active' => (bool)$userRecord->is_active,
+            ];
+            
+            if ($userRecord->avatar) {
+                $userData['avatar'] = str_starts_with($userRecord->avatar, 'http') 
+                    ? $userRecord->avatar 
+                    : asset('storage/' . $userRecord->avatar);
             }
 
             return response()->json([
-                'status' => 'error',
-                'message' => 'Identifiants non valides'
-            ], 401);
-        }
-
-        if (!$user->is_active) {
+                'status' => 'success',
+                'message' => 'Connexion réussie',
+                'user' => $userData,
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'data' => [
+                    'token' => $token,
+                    'token_type' => 'Bearer',
+                    'user' => $userData
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Erreur login:', ['error' => $e->getMessage()]);
             return response()->json([
                 'status' => 'error',
-                'message' => 'Compte désactivé'
-            ], 401);
+                'message' => 'Erreur serveur: vérifiez que MySQL est en cours d\'exécution',
+                'error' => $e->getMessage()
+            ], 503);
         }
-
-        // Réinitialiser les tentatives
-        $user->login_attempts = 0;
-        $user->save();
-
-        // Créer token Sanctum
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'status' => 'success',
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $user
-        ]);
     }
 
     /**
@@ -138,9 +150,19 @@ class AuthController extends Controller
      */
     public function profile(): JsonResponse
     {
+        $user = auth('sanctum')->user();
+        $userData = $user->toArray();
+        
+        // Convert avatar path to full URL
+        if ($user->avatar) {
+            $userData['avatar'] = str_starts_with($user->avatar, 'http') 
+                ? $user->avatar 
+                : asset('storage/' . $user->avatar);
+        }
+        
         return response()->json([
             'status' => 'success',
-            'user' => auth('sanctum')->user()
+            'data' => $userData
         ]);
     }
 
@@ -153,7 +175,8 @@ class AuthController extends Controller
             'name' => 'sometimes|string|between:2,100',
             'email' => 'sometimes|string|email|max:100|unique:users,email,' . auth('sanctum')->id(),
             'password' => 'sometimes|string|min:8|confirmed',
-            'old_password' => 'required_with:password|string'
+            'old_password' => 'required_with:password|string',
+            'avatar' => 'sometimes|file|image|max:5120'
         ]);
 
         if ($validator->fails()) {
@@ -193,12 +216,77 @@ class AuthController extends Controller
             $user->email = $request->email;
         }
 
+        // Handle avatar upload
+        if ($request->hasFile('avatar')) {
+            $file = $request->file('avatar');
+            $path = $file->store('avatars', 'public');
+            $user->avatar = $path;
+        }
+
         $user->save();
+
+        $userData = $user->toArray();
+        if ($user->avatar) {
+            $userData['avatar'] = str_starts_with($user->avatar, 'http') 
+                ? $user->avatar 
+                : asset('storage/' . $user->avatar);
+        }
 
         return response()->json([
             'status' => 'success',
             'message' => 'Profil mis à jour avec succès',
-            'user' => $user
+            'user' => $userData
+        ]);
+    }
+
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'avatar' => 'required|file|image|max:5120'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Erreur de validation',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user = auth('sanctum')->user();
+        
+        if ($request->hasFile('avatar')) {
+            // Delete old avatar
+            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+
+            $file = $request->file('avatar');
+            $path = $file->store('avatars', 'public');
+            $user->avatar = $path;
+            $user->save();
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Avatar mis à jour avec succès',
+            'avatar' => $user->avatar ? asset('storage/' . $user->avatar) : null
+        ]);
+    }
+
+    public function deleteAvatar(): JsonResponse
+    {
+        $user = auth('sanctum')->user();
+        
+        if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+            Storage::disk('public')->delete($user->avatar);
+            $user->avatar = null;
+            $user->save();
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Avatar supprimé avec succès'
         ]);
     }
 }

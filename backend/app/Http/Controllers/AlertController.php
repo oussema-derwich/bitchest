@@ -2,72 +2,76 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Alert;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class AlertController extends Controller
 {
+    /**
+     * Get all notifications (alerts) for the authenticated user
+     */
     public function index()
     {
-        $alerts = Alert::with(['crypto'])
-            ->where('user_id', Auth::id())
-            ->get();
+        $notifications = Notification::where('user_id', Auth::id())
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($notification) {
+                return [
+                    'id' => $notification->id,
+                    'user_id' => $notification->user_id,
+                    'message' => $notification->message,
+                    'is_read' => $notification->is_read,
+                    'created_at' => $notification->created_at,
+                    'updated_at' => $notification->updated_at
+                ];
+            });
             
-        return response()->json($alerts);
-    }
-
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'crypto_id' => 'required|exists:cryptos,id',
-            'price_threshold' => 'required|numeric|min:0',
-            'type' => 'required|in:above,below',
-        ]);
-
-        $alert = Alert::create([
-            'user_id' => Auth::id(),
-            'crypto_id' => $validated['crypto_id'],
-            'price_threshold' => $validated['price_threshold'],
-            'type' => $validated['type'],
-            'is_active' => true
-        ]);
-
         return response()->json([
-            'message' => 'Alerte créée avec succès',
-            'alert' => $alert
+            'status' => 'success',
+            'data' => $notifications
         ]);
     }
 
-    public function update(Request $request, Alert $alert)
+    /**
+     * Mark notification as read
+     */
+    public function markAsRead(Request $request, Notification $notification)
     {
-        // Vérifier que l'alerte appartient à l'utilisateur
-        if ($alert->user_id !== Auth::id()) {
+        if ($notification->user_id !== Auth::id()) {
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        $validated = $request->validate([
-            'price_threshold' => 'sometimes|numeric|min:0',
-            'type' => 'sometimes|in:above,below',
-            'is_active' => 'sometimes|boolean'
-        ]);
-
-        $alert->update($validated);
+        $notification->update(['is_read' => true]);
 
         return response()->json([
-            'message' => 'Alerte mise à jour avec succès',
-            'alert' => $alert
+            'message' => 'Notification marquée comme lue',
+            'notification' => $notification
         ]);
     }
 
-    public function destroy(Alert $alert)
+    /**
+     * Delete notification
+     */
+    public function destroy(Notification $notification)
     {
-        if ($alert->user_id !== Auth::id()) {
+        if ($notification->user_id !== Auth::id()) {
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        $alert->delete();
+        $notification->delete();
 
-        return response()->json(['message' => 'Alerte supprimée avec succès']);
+        return response()->json(['message' => 'Notification supprimée avec succès']);
+    }
+
+    /**
+     * Mark all notifications as read
+     */
+    public function markAllAsRead()
+    {
+        Notification::where('user_id', Auth::id())
+            ->update(['is_read' => true]);
+
+        return response()->json(['message' => 'Toutes les notifications marquées comme lues']);
     }
 }

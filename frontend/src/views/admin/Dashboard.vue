@@ -205,14 +205,33 @@ const formatDate = (date: string): string => {
 };
 
 // Actions
+const ensureFullAvatarUrl = (avatar: string | undefined): string | undefined => {
+  if (!avatar) return undefined;
+  return avatar.startsWith('http') ? avatar : `http://localhost:8000/storage/${avatar}`;
+};
+
 const refreshData = async () => {
   try {
     const response = await api.get('/admin/dashboard');
     if (response.data?.stats) {
       stats.value = response.data.stats;
+      // Ensure avatars are full URLs
+      if (response.data.stats.recentTransactions) {
+        response.data.stats.recentTransactions.forEach((tx: any) => {
+          if (tx.user?.avatar) {
+            tx.user.avatar = ensureFullAvatarUrl(tx.user.avatar);
+          }
+        });
+      }
     }
     if (response.data?.transactions) {
       transactions.value = response.data.transactions;
+      // Ensure avatars are full URLs
+      transactions.value.forEach((tx: any) => {
+        if (tx.user?.avatar) {
+          tx.user.avatar = ensureFullAvatarUrl(tx.user.avatar);
+        }
+      });
     }
   } catch (error: any) {
     console.log('Admin dashboard - Chargement des stats échoué (normal si pas admin):', error.response?.status);

@@ -4,43 +4,32 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class WalletCrypto extends Model
 {
     use HasFactory;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<string>
-     */
     protected $fillable = [
         'wallet_id',
         'cryptocurrency_id',
         'quantity',
-        'avg_buy_price'
+        'average_buy_price'
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'quantity' => 'decimal:8',
-        'avg_buy_price' => 'decimal:2'
+        'average_buy_price' => 'decimal:2'
     ];
 
     /**
-     * The table associated with the model.
-     *
-     * @var string
+     * Table name
      */
     protected $table = 'wallet_cryptos';
 
     /**
-     * Get the wallet that owns the wallet crypto.
+     * Relation: WalletCrypto appartient à un Wallet
      */
     public function wallet(): BelongsTo
     {
@@ -48,7 +37,7 @@ class WalletCrypto extends Model
     }
 
     /**
-     * Get the cryptocurrency.
+     * Relation: WalletCrypto contient une Cryptocurrency
      */
     public function cryptocurrency(): BelongsTo
     {
@@ -56,32 +45,38 @@ class WalletCrypto extends Model
     }
 
     /**
-     * Get the current value of this holding.
+     * Relation: WalletCrypto a plusieurs Transactions
      */
-    public function getCurrentValue()
+    public function transactions(): HasMany
     {
-        return $this->quantity * $this->cryptocurrency->current_price;
+        return $this->hasMany(Transaction::class, 'wallet_crypto_id');
     }
 
     /**
-     * Get the profit/loss of this holding.
+     * Calcule la valeur actuelle de cette crypto
      */
-    public function getProfitLoss()
+    public function getCurrentValue(): float
     {
-        $currentValue = $this->getCurrentValue();
-        $investedValue = $this->quantity * $this->avg_buy_price;
-        return $currentValue - $investedValue;
+        return (float)$this->quantity * (float)$this->cryptocurrency->current_price;
     }
 
     /**
-     * Get the profit/loss percentage.
+     * Calcule les gains/pertes
      */
-    public function getProfitLossPercentage()
+    public function getProfitLoss(): float
     {
-        $investedValue = $this->quantity * $this->avg_buy_price;
-        if ($investedValue == 0) {
-            return 0;
-        }
-        return (($this->getProfitLoss() / $investedValue) * 100);
+        $invested = (float)$this->quantity * (float)$this->average_buy_price;
+        $current = $this->getCurrentValue();
+        return $current - $invested;
+    }
+
+    /**
+     * Calcule le pourcentage de profit/loss
+     */
+    public function getProfitLossPercentage(): float
+    {
+        $invested = (float)$this->quantity * (float)$this->average_buy_price;
+        if ($invested == 0) return 0;
+        return (($this->getProfitLoss() / $invested) * 100);
     }
 }

@@ -1,283 +1,477 @@
 <template>
-  <div class="flex">
-    <ClientSidebar />
-    <div class="flex-1">
-      <!-- Header Navbar -->
-      <header class="bg-white shadow-md p-4 flex justify-between items-center">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white font-bold">BC</div>
-          <h1 class="text-xl font-bold text-primary">BitChest</h1>
-        </div>
-        <div class="flex items-center gap-4">
-          <button class="relative text-gray-600 hover:text-primary transition">
-            🔔
-            <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
-          <span class="text-sm font-medium text-gray-700">{{ userName }}</span>
-          <button
-            @click="logout"
-            class="px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition"
-          >
-            Déconnexion
-          </button>
-        </div>
-      </header>
+  <div class="min-h-screen bg-gray-50 p-6">
+    <div class="max-w-7xl mx-auto">
+      <!-- En-tête -->
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Gestion des Inscriptions</h1>
+        <p class="text-gray-600 mt-2">Gérez les demandes d'inscription des utilisateurs</p>
+      </div>
 
-      <!-- Main Content -->
-      <main class="p-8 bg-background min-h-screen">
-        <h2 class="text-3xl font-bold text-secondary mb-8">Mon Profil</h2>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <!-- Profile Picture -->
-          <div class="bg-white rounded-lg shadow-card p-6">
-            <h3 class="text-lg font-bold text-secondary mb-4">Photo de Profil</h3>
-            <div class="mb-4">
-              <div class="w-full aspect-square bg-gray-200 rounded-lg flex items-center justify-center text-4xl mb-4">
-                👤
+      <!-- Filtres -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex flex-wrap gap-2">
+            <button
+              @click="loadRequests('pending')"
+              :class="[
+                'px-4 py-2.5 rounded-lg font-medium transition-all duration-200',
+                currentStatus === 'pending'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+              ]"
+            >
+              <div class="flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>En attente</span>
+                <span v-if="statusCounts.pending > 0" class="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                  {{ statusCounts.pending }}
+                </span>
               </div>
-              <button
-                @click="() => (fileInput as any)?.click()"
-                class="w-full px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition mb-2"
-              >
-                📤 Uploader
-              </button>
-              <button
-                @click="deletePhoto"
-                class="w-full px-4 py-2 bg-danger text-white rounded-lg font-medium hover:opacity-90 transition"
-              >
-                🗑️ Supprimer
-              </button>
-              <input
-                ref="fileInput"
-                type="file"
-                accept="image/png,image/jpeg"
-                @change="uploadPhoto"
-                class="hidden"
-              />
-            </div>
+            </button>
+            
+            <button
+              @click="loadRequests('approved')"
+              :class="[
+                'px-4 py-2.5 rounded-lg font-medium transition-all duration-200',
+                currentStatus === 'approved'
+                  ? 'bg-green-50 text-green-700 border border-green-200'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+              ]"
+            >
+              <div class="flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Approuvées</span>
+                <span v-if="statusCounts.approved > 0" class="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                  {{ statusCounts.approved }}
+                </span>
+              </div>
+            </button>
+            
+            <button
+              @click="loadRequests('rejected')"
+              :class="[
+                'px-4 py-2.5 rounded-lg font-medium transition-all duration-200',
+                currentStatus === 'rejected'
+                  ? 'bg-red-50 text-red-700 border border-red-200'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+              ]"
+            >
+              <div class="flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Rejetées</span>
+                <span v-if="statusCounts.rejected > 0" class="bg-red-100 text-red-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                  {{ statusCounts.rejected }}
+                </span>
+              </div>
+            </button>
           </div>
 
-          <!-- Edit Info -->
-          <div class="lg:col-span-2 bg-white rounded-lg shadow-card p-6">
-            <h3 class="text-lg font-bold text-secondary mb-6">Informations Personnelles</h3>
-
-            <!-- Name -->
-            <div class="mb-6">
-              <label class="block text-sm font-medium text-gray-700 mb-2">Nom Complet</label>
-              <input
-                v-model="form.name"
-                type="text"
-                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg font-medium focus:border-primary focus:outline-none transition"
-              />
+          <!-- Statistiques -->
+          <div class="flex items-center gap-4 text-sm text-gray-600">
+            <div class="flex items-center gap-1">
+              <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+              <span>{{ statusCounts.pending }} en attente</span>
             </div>
-
-            <!-- Email -->
-            <div class="mb-6">
-              <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
-              <input
-                v-model="form.email"
-                type="email"
-                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg font-medium focus:border-primary focus:outline-none transition"
-              />
+            <div class="flex items-center gap-1">
+              <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+              <span>{{ statusCounts.approved }} approuvées</span>
             </div>
-
-            <!-- Change Password Section -->
-            <div class="border-t-2 border-gray-200 pt-6 mb-6">
-              <h4 class="text-md font-bold text-secondary mb-4">Changer le Mot de Passe</h4>
-
-              <!-- Old Password -->
-              <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Ancien Mot de Passe</label>
-                <input
-                  v-model="form.oldPassword"
-                  type="password"
-                  class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg font-medium focus:border-primary focus:outline-none transition"
-                />
-              </div>
-
-              <!-- New Password -->
-              <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Nouveau Mot de Passe</label>
-                <input
-                  v-model="form.newPassword"
-                  type="password"
-                  class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg font-medium focus:border-primary focus:outline-none transition"
-                />
-              </div>
-
-              <!-- Confirm Password -->
-              <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Confirmer Mot de Passe</label>
-                <input
-                  v-model="form.confirmPassword"
-                  type="password"
-                  class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg font-medium focus:border-primary focus:outline-none transition"
-                />
-              </div>
-            </div>
-
-            <!-- 2FA Section -->
-            <div class="border-t-2 border-gray-200 pt-6 mb-6">
-              <h4 class="text-md font-bold text-secondary mb-4">Authentification à Deux Facteurs (2FA)</h4>
-              <p class="text-gray-600 text-sm mb-4">
-                Sécurisez votre compte avec Google Authenticator
-              </p>
-              <button
-                @click="setupTwoFactor"
-                class="px-4 py-2 bg-accent text-white rounded-lg font-medium hover:opacity-90 transition"
-              >
-                🔐 Configurer 2FA
-              </button>
-            </div>
-
-            <!-- Save Button -->
-            <div class="flex gap-4">
-              <button
-                @click="saveProfile"
-                class="px-6 py-3 bg-success text-white rounded-lg font-bold hover:opacity-90 transition"
-              >
-                ✓ Enregistrer
-              </button>
-              <button
-                @click="resetForm"
-                class="px-6 py-3 bg-gray-400 text-white rounded-lg font-bold hover:opacity-90 transition"
-              >
-                ↻ Réinitialiser
-              </button>
+            <div class="flex items-center gap-1">
+              <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+              <span>{{ statusCounts.rejected }} rejetées</span>
             </div>
           </div>
         </div>
-      </main>
+      </div>
+
+      <!-- Tableau -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Utilisateur
+                </th>
+                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Rôle
+                </th>
+                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Date
+                </th>
+                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Statut
+                </th>
+                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="req in requests" :key="req.id" class="hover:bg-gray-50 transition-colors duration-150">
+                <!-- Informations utilisateur -->
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div class="flex-shrink-0 w-10 h-10 bg-gradient-to-r from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
+                      <span class="text-blue-600 font-semibold">
+                        {{ (req.user?.name ?? req.name ?? 'U').charAt(0).toUpperCase() }}
+                      </span>
+                    </div>
+                    <div class="ml-4">
+                      <div class="text-sm font-medium text-gray-900">
+                        {{ req.user?.name ?? req.name ?? 'Non spécifié' }}
+                      </div>
+                      <div class="text-sm text-gray-500">
+                        {{ req.email }}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Rôle -->
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
+                    {{ req.role || 'Non défini' }}
+                  </span>
+                </td>
+
+                <!-- Date -->
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {{ formatDate(req.created_at) }}
+                </td>
+
+                <!-- Statut -->
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span v-if="req.is_approved" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    Approuvé
+                  </span>
+                  <span v-else-if="req.is_rejected" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                    Rejeté
+                  </span>
+                  <span v-else class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                    </svg>
+                    En attente
+                  </span>
+                </td>
+
+                <!-- Actions -->
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <div class="flex items-center gap-2">
+                    <button
+                      v-if="!req.is_approved && !req.is_rejected"
+                      @click="approve(req.id)"
+                      class="inline-flex items-center px-3 py-1.5 rounded-lg bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow"
+                    >
+                      <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Accepter
+                    </button>
+                    
+                    <button
+                      v-if="!req.is_rejected && !req.is_approved"
+                      @click="rejectPrompt(req.id)"
+                      class="inline-flex items-center px-3 py-1.5 rounded-lg bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow"
+                    >
+                      <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Rejeter
+                    </button>
+
+                    <button
+                      @click="showDetails(req)"
+                      class="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all duration-200"
+                    >
+                      <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Détails
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- État vide -->
+              <tr v-if="requests.length === 0">
+                <td colspan="5" class="px-6 py-16 text-center">
+                  <div class="flex flex-col items-center justify-center text-gray-400">
+                    <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <p class="text-lg font-medium text-gray-600 mb-2">Aucune demande</p>
+                    <p class="text-gray-500">Aucune demande {{ getStatusText(currentStatus) }} pour le moment.</p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Modal de confirmation -->
+      <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+          <div class="p-6">
+            <h3 class="text-xl font-bold text-gray-900 mb-2">Rejeter la demande</h3>
+            <p class="text-gray-600 mb-4">Veuillez indiquer la raison du rejet :</p>
+            <textarea
+              v-model="rejectReason"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+              rows="3"
+              placeholder="Explication du rejet..."
+            ></textarea>
+            <div class="flex justify-end gap-3 mt-6">
+              <button
+                @click="cancelReject"
+                class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+              >
+                Annuler
+              </button>
+              <button
+                @click="confirmReject"
+                :disabled="!rejectReason.trim()"
+                :class="[
+                  'px-4 py-2 rounded-lg transition-all duration-200',
+                  rejectReason.trim()
+                    ? 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700'
+                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                ]"
+              >
+                Confirmer le rejet
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent, ref, onMounted } from 'vue'
-import ClientSidebar from '../components/ClientSidebar.vue'
-import api from '../services/api'
-import { useRouter } from 'vue-router'
-import { currentUser, fetchUserProfile } from '../services/auth'
+<script setup lang="ts">
+import { ref, onMounted, reactive } from 'vue'
+import { getAdminRegistrationRequests, approveRegistrationRequest, rejectRegistrationRequest } from '@/services/adminApi'
 
-export default defineComponent({
-  components: { ClientSidebar },
-  setup() {
-    const router = useRouter()
-    const userName = ref(currentUser.value?.name || 'Utilisateur')
-    const fileInput = ref<HTMLInputElement | null>(null)
-    const form = ref({
-      name: currentUser.value?.name || '',
-      email: currentUser.value?.email || '',
-      oldPassword: '',
-      newPassword: '',
-      confirmPassword: ''
-    })
-
-    const loadData = async () => {
-      try {
-        const user = await fetchUserProfile()
-        if (user) {
-          userName.value = user.name || 'Utilisateur'
-          form.value.name = user.name
-          form.value.email = user.email
-        }
-      } catch (e) {
-        console.error('Error loading profile:', e)
-      }
-    }
-
-    const logout = async () => {
-      try {
-        await api.post('/auth/logout')
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        router.push('/login')
-      } catch (e) {
-        console.error('Logout error:', e)
-        router.push('/login')
-      }
-    }
-
-    const uploadPhoto = (event: Event) => {
-      const file = (event.target as HTMLInputElement).files?.[0]
-      if (file) {
-        console.log('Photo uploaded:', file.name)
-        alert('Photo uploadée: ' + file.name)
-      }
-    }
-
-    const uploadPhotoClick = () => {
-      (fileInput.value as HTMLInputElement | null)?.click()
-    }
-
-    const deletePhoto = () => {
-      console.log('Photo deleted')
-      alert('Photo supprimée')
-    }
-
-    const saveProfile = async () => {
-      try {
-        // Validate form
-        if (!form.value.name || !form.value.email) {
-          alert('Veuillez remplir tous les champs requis')
-          return
-        }
-
-        // If password change requested
-        if (form.value.newPassword) {
-          if (form.value.newPassword !== form.value.confirmPassword) {
-            alert('Les mots de passe ne correspondent pas')
-            return
-          }
-          if (!form.value.oldPassword) {
-            alert('Veuillez entrer votre ancien mot de passe')
-            return
-          }
-        }
-
-        // Save to API
-        const response = await api.put('/auth/profile', {
-          name: form.value.name,
-          email: form.value.email,
-          password: form.value.newPassword || undefined
-        })
-
-        alert('Profil mis à jour avec succès')
-        userName.value = form.value.name
-        form.value.oldPassword = ''
-        form.value.newPassword = ''
-        form.value.confirmPassword = ''
-      } catch (e) {
-        console.error('Error saving profile:', e)
-        alert('Erreur lors de la sauvegarde')
-      }
-    }
-
-    const resetForm = () => {
-      form.value.oldPassword = ''
-      form.value.newPassword = ''
-      form.value.confirmPassword = ''
-      loadData()
-    }
-
-    const setupTwoFactor = () => {
-      alert('Fonctionnalité 2FA à implémenter')
-      // Would open a modal with QR code for Google Authenticator
-    }
-
-    onMounted(loadData)
-
-    return {
-      userName,
-      fileInput,
-      form,
-      logout,
-      uploadPhoto,
-      deletePhoto,
-      saveProfile,
-      resetForm,
-      setupTwoFactor
-    }
+// Types pour mieux structurer
+interface RegistrationRequest {
+  id: number
+  name?: string
+  email: string
+  role: string
+  is_approved: boolean
+  is_rejected: boolean
+  created_at: string
+  user?: {
+    name: string
   }
+}
+
+interface PaginatedResponse<T> {
+  data?: T[]
+  // Ajoutez ici les autres propriétés selon votre API
+  meta?: {
+    total?: number
+    [key: string]: any
+  }
+  [key: string]: any
+}
+
+const requests = ref<RegistrationRequest[]>([])
+const currentStatus = ref<string>('pending')
+const showModal = ref(false)
+const rejectReason = ref('')
+const selectedRequestId = ref<number | null>(null)
+const isLoading = ref(false)
+
+const statusCounts = reactive({
+  pending: 0,
+  approved: 0,
+  rejected: 0
+})
+
+async function loadRequests(status: string = 'pending') {
+  try {
+    isLoading.value = true
+    currentStatus.value = status
+    const res = await getAdminRegistrationRequests(1, 100, status !== 'all' ? status : undefined)
+    
+    // Adaptez cette ligne selon la structure réelle de votre réponse
+    requests.value = Array.isArray(res) ? res : (res.data || [])
+    
+  } catch (e) {
+    console.error('Error loading requests', e)
+    requests.value = []
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function loadStatistics() {
+  try {
+    // Chargez les données pour chaque statut
+    const [pendingRes, approvedRes, rejectedRes] = await Promise.all([
+      getAdminRegistrationRequests(1, 100, 'pending'),
+      getAdminRegistrationRequests(1, 100, 'approved'),
+      getAdminRegistrationRequests(1, 100, 'rejected')
+    ])
+    
+    // Adaptez selon votre structure de réponse
+    const getDataLength = (res: any) => {
+      if (Array.isArray(res)) return res.length
+      if (res && Array.isArray(res.data)) return res.data.length
+      return 0
+    }
+    
+    statusCounts.pending = getDataLength(pendingRes)
+    statusCounts.approved = getDataLength(approvedRes)
+    statusCounts.rejected = getDataLength(rejectedRes)
+    
+  } catch (e) {
+    console.error('Error loading statistics', e)
+  }
+}
+
+function formatDate(d: string | undefined) {
+  if (!d) return '—'
+  try {
+    const date = new Date(d)
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch {
+    return d
+  }
+}
+
+function getStatusText(status: string) {
+  const texts: { [key: string]: string } = {
+    pending: "en attente",
+    approved: "approuvée",
+    rejected: "rejetée",
+    all: ""
+  }
+  return texts[status] || ""
+}
+
+async function approve(id: number) {
+  if (!confirm('Êtes-vous sûr de vouloir approuver cette demande ?')) return
+  try {
+    await approveRegistrationRequest(id)
+    await loadRequests(currentStatus.value)
+    await loadStatistics() // Recharger les statistiques
+    alert('✅ Demande approuvée avec succès')
+  } catch (e: any) {
+    alert(e?.message || '❌ Erreur lors de l\'approbation')
+  }
+}
+
+function rejectPrompt(id: number) {
+  selectedRequestId.value = id
+  rejectReason.value = ''
+  showModal.value = true
+}
+
+function cancelReject() {
+  showModal.value = false
+  selectedRequestId.value = null
+  rejectReason.value = ''
+}
+
+async function confirmReject() {
+  if (!selectedRequestId.value || !rejectReason.value.trim()) return
+  
+  try {
+    await rejectRegistrationRequest(selectedRequestId.value, rejectReason.value)
+    await loadRequests(currentStatus.value)
+    await loadStatistics() // Recharger les statistiques
+    showModal.value = false
+    alert('❌ Demande rejetée')
+  } catch (e: any) {
+    alert(e?.message || 'Erreur lors du rejet')
+  } finally {
+    selectedRequestId.value = null
+    rejectReason.value = ''
+  }
+}
+
+function showDetails(req: RegistrationRequest) {
+  // Afficher les détails dans une modal ou console
+  const details = `
+    ID: ${req.id}
+    Nom: ${req.user?.name ?? req.name ?? 'Non spécifié'}
+    Email: ${req.email}
+    Rôle: ${req.role}
+    Date: ${formatDate(req.created_at)}
+    Statut: ${req.is_approved ? 'Approuvé' : req.is_rejected ? 'Rejeté' : 'En attente'}
+  `
+  console.log('Détails de la demande:', details)
+  // Vous pouvez remplacer ceci par une modal si vous le souhaitez
+  alert(details)
+}
+
+onMounted(() => {
+  loadRequests('pending')
+  loadStatistics()
 })
 </script>
+
+<style scoped>
+/* Ajoutez des animations si nécessaire */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Scrollbar personnalisée */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Animation de chargement */
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+</style>
